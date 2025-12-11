@@ -355,5 +355,19 @@ VALUES
      'Statistics meter: stores reading value at exact beginning of month for monthly consumption tracking');
 
 -- ============================================================================
+-- Default Company
+-- Initial company record with placeholder values - update after first login
+-- ============================================================================
+INSERT INTO company (name, cui_cif, address, city, county, invoice_prefix)
+VALUES (
+    'Company Name',
+    '00000000',
+    'Address',
+    'City',
+    'County',
+    'INV'
+);
+
+-- ============================================================================
 -- End of Schema
 -- ============================================================================
