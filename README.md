@@ -2,14 +2,10 @@
 
   
 
-A comprehensive property management application for landlords and property managers. Manage tenants, track utility
+A comprehensive property management application for landlords and property managers. Manage tenants, track utility costs, generate invoices, and monitor cash flow - all in one place.
 
-costs, generate invoices, and monitor cash flow - all in one place.
-
-  
 
 ## Features
-
   
 
 - ****Tenant Management**** - Track tenant information, contracts, and rental amounts

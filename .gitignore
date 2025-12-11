@@ -8,9 +8,9 @@
 # ============================================================================
 # Documentation Files (User will create their own)
 # ============================================================================
-*.md
+#*.md
 !cpanfile.snapshot
-*.txt
+#*.txt
 
 # ============================================================================
 # Environment & Secrets
@@ -291,7 +291,7 @@ typings/
 # Application-Specific Exclusions
 # ============================================================================
 # Screenshots and images (user documentation)
-*.png
+#*.png
 *.jpg
 *.jpeg
 *.gif

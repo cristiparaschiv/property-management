@@ -1,0 +1,1139 @@
+================================================================================
+PROPERTY MANAGEMENT & INVOICING SYSTEM - DEPLOYMENT GUIDE
+================================================================================
+Version: 1.0
+Last Updated: 2025-12-11
+Technology Stack: Perl Dancer2 + React + MariaDB + Docker
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+A. Docker Deployment (Recommended for Quick Start)
+B. Production Deployment from Git Clone (Manual Installation)
+C. Development Environment Setup
+D. Database Management
+E. Troubleshooting
+
+
+================================================================================
+SECTION A: DOCKER DEPLOYMENT
+================================================================================
+Docker deployment is the easiest way to run the application with all
+dependencies pre-configured. This method is suitable for both development
+testing and production deployments.
+
+--------------------------------------------------------------------------------
+A.1 PREREQUISITES
+--------------------------------------------------------------------------------
+Required Software:
+  - Docker Engine 20.10 or higher
+  - Docker Compose v2.0 or higher (or docker-compose v1.29+)
+  - 2GB+ available RAM
+  - 5GB+ available disk space
+
+Check installed versions:
+  $ docker --version
+  $ docker compose version
+
+Installation:
+  - Linux: https://docs.docker.com/engine/install/
+  - macOS: https://docs.docker.com/desktop/install/mac-install/
+  - Windows: https://docs.docker.com/desktop/install/windows-install/
+
+--------------------------------------------------------------------------------
+A.2 STEP-BY-STEP DOCKER DEPLOYMENT
+--------------------------------------------------------------------------------
+
+Step 1: Clone the Repository
+-----------------------------
+$ git clone https://github.com/YOUR_USERNAME/property-management.git
+$ cd property-management
+
+
+Step 2: Configure Environment Variables
+----------------------------------------
+Create a .env file from the example template:
+
+$ cp .env.example .env
+
+Edit the .env file with your preferred text editor:
+
+$ nano .env    # or vim, vi, etc.
+
+Required configuration (CHANGE THESE VALUES):
+
+  DB_ROOT_PASSWORD=YOUR_SECURE_ROOT_PASSWORD_HERE
+  DB_NAME=property_management
+  DB_USER=propman
+  DB_PASSWORD=YOUR_SECURE_DATABASE_PASSWORD_HERE
+  ENVIRONMENT=docker
+  JWT_SECRET=YOUR_LONG_RANDOM_JWT_SECRET_HERE
+
+Generate a secure JWT secret (Linux/macOS):
+  $ openssl rand -hex 32
+
+SECURITY WARNING: Never use default passwords in production!
+
+
+Step 3: Build and Start the Application
+----------------------------------------
+Build and start all containers:
+
+$ docker compose up -d --build
+
+This command will:
+  - Build the backend Perl Dancer2 container
+  - Build the frontend React+Nginx container
+  - Pull the MariaDB 10.11 image
+  - Create necessary volumes for database and PDFs
+  - Initialize the database with schema and default admin user
+  - Start all services in detached mode
+
+Expected output:
+  [+] Running 4/4
+   ✔ Network property-network    Created
+   ✔ Container property-db       Started
+   ✔ Container property-backend  Started
+   ✔ Container property-frontend Started
+
+
+Step 4: Verify Deployment
+--------------------------
+Check that all containers are running:
+
+$ docker compose ps
+
+Expected output shows all containers with "Up" status:
+  NAME                 IMAGE                    STATUS
+  property-db          mariadb:10.11           Up (healthy)
+  property-backend     property-backend        Up (healthy)
+  property-frontend    property-frontend       Up
+
+Check container logs:
+
+$ docker compose logs -f
+
+Look for:
+  - Database: "MariaDB init process done. Ready for start up."
+  - Backend: "Starman: Accepting connections at http://0:5000"
+  - Frontend: No errors in nginx logs
+
+
+Step 5: Access the Application
+-------------------------------
+Open your web browser and navigate to:
+
+  http://localhost
+
+Default Login Credentials:
+  Username: admin
+  Password: Admin123!
+
+IMPORTANT: Change the admin password immediately after first login!
+
+Backend API is available at:
+  http://localhost:5001/api/
+
+API Health Check:
+  http://localhost:5001/api/health
+
+
+Step 6: Post-Deployment Tasks
+------------------------------
+1. Login with default admin credentials
+2. Change admin password immediately
+3. Configure company information
+4. Add tenants, utility providers, etc.
+
+
+--------------------------------------------------------------------------------
+A.3 OPTIONAL: LOADING DEVELOPMENT SEED DATA
+--------------------------------------------------------------------------------
+The application starts with a clean database containing only:
+  - Default admin user (username: admin, password: Admin123!)
+  - Two general electricity meters required for the system
+
+To load demo/seed data (sample tenants, invoices, utility providers):
+
+Step 1: Stop the containers
+$ docker compose down
+
+Step 2: Remove the database volume (WARNING: This deletes all data!)
+$ docker volume rm property_db_data
+
+Step 3: Edit docker-compose.yml
+Uncomment the seed data line in the db service volumes section:
+
+  volumes:
+    - db_data:/var/lib/mysql
+    - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    - ./database/seeds/development.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+
+Step 4: Restart the containers
+$ docker compose up -d
+
+The database will now include:
+  - 3 sample tenants (2 individuals, 1 company)
+  - 5 utility providers
+  - Sample utility percentages
+  - Sample received invoices
+  - Sample meter readings
+  - Sample generated invoices
+  - BNR exchange rates
+
+
+--------------------------------------------------------------------------------
+A.4 USEFUL DOCKER COMMANDS
+--------------------------------------------------------------------------------
+
+View container logs:
+  $ docker compose logs -f                    # All containers
+  $ docker compose logs -f backend            # Backend only
+  $ docker compose logs -f frontend           # Frontend only
+  $ docker compose logs -f db                 # Database only
+
+Stop the application:
+  $ docker compose stop
+
+Start the application (after stopping):
+  $ docker compose start
+
+Restart all containers:
+  $ docker compose restart
+
+Rebuild containers (after code changes):
+  $ docker compose up -d --build
+
+Stop and remove containers (keeps volumes/data):
+  $ docker compose down
+
+Stop and remove everything including volumes (DATA LOSS!):
+  $ docker compose down -v
+
+Execute commands inside containers:
+  $ docker compose exec backend bash          # Backend shell
+  $ docker compose exec db mariadb -u root -p # Database shell
+  $ docker compose exec frontend sh           # Frontend shell
+
+View container resource usage:
+  $ docker stats
+
+Access database with MariaDB client:
+  $ docker compose exec db mariadb -u propman -p property_management
+  (Enter the DB_PASSWORD from .env)
+
+Backup database:
+  $ docker compose exec db mariadb-dump -u root -p property_management > backup.sql
+
+Restore database:
+  $ docker compose exec -T db mariadb -u root -p property_management < backup.sql
+
+
+--------------------------------------------------------------------------------
+A.5 DOCKER PRODUCTION CONSIDERATIONS
+--------------------------------------------------------------------------------
+
+For production deployment with Docker:
+
+1. Use Environment Variables:
+   - Never commit .env file to version control
+   - Use strong, unique passwords
+   - Generate cryptographically secure JWT_SECRET
+
+2. Configure Reverse Proxy (Nginx/Traefik):
+   - Terminate SSL/TLS at reverse proxy
+   - Configure proper domain names
+   - Set up Let's Encrypt for SSL certificates
+
+3. Update docker-compose.yml:
+   - Remove port mappings (use reverse proxy)
+   - Set restart: always for auto-restart
+   - Configure logging drivers
+   - Set resource limits (CPU/memory)
+
+4. Database Backup Strategy:
+   - Implement automated backups
+   - Store backups off-server
+   - Test restore procedures regularly
+
+5. Monitoring:
+   - Set up container health monitoring
+   - Configure log aggregation
+   - Monitor disk usage for volumes
+
+6. Security:
+   - Keep Docker images updated
+   - Run containers as non-root users
+   - Use Docker secrets for sensitive data
+   - Implement network segmentation
+
+
+================================================================================
+SECTION B: PRODUCTION DEPLOYMENT (FROM GIT CLONE)
+================================================================================
+This section covers manual installation on a production server without Docker.
+This gives you full control but requires more setup and maintenance.
+
+--------------------------------------------------------------------------------
+B.1 SYSTEM REQUIREMENTS
+--------------------------------------------------------------------------------
+
+Operating System:
+  - Ubuntu 22.04 LTS or 24.04 LTS (recommended)
+  - Debian 11 or 12
+  - CentOS/RHEL 8+ or Rocky Linux 8+
+  - Any Linux distribution with systemd
+
+Hardware Requirements:
+  - CPU: 2+ cores recommended
+  - RAM: 4GB+ recommended (2GB minimum)
+  - Disk: 20GB+ available space
+  - Network: Static IP or domain name
+
+Required Software:
+  - Perl 5.32 or higher
+  - MariaDB 10.6+ or MySQL 8.0+
+  - Node.js 20.x LTS
+  - Nginx 1.18+
+  - Git
+  - Build tools (gcc, make, etc.)
+
+Optional but Recommended:
+  - systemd (for service management)
+  - Let's Encrypt certbot (for SSL)
+  - fail2ban (for security)
+  - logrotate (for log management)
+
+
+--------------------------------------------------------------------------------
+B.2 STEP-BY-STEP PRODUCTION INSTALLATION
+--------------------------------------------------------------------------------
+
+STEP 1: System Preparation
+---------------------------
+Update system packages:
+
+Ubuntu/Debian:
+$ sudo apt update
+$ sudo apt upgrade -y
+
+Install required packages:
+$ sudo apt install -y git build-essential curl wget nginx mariadb-server \
+  libmariadb-dev libmariadb-dev-compat libssl-dev libxml2-dev \
+  libexpat1-dev pkg-config cpanminus wkhtmltopdf fontconfig \
+  fonts-dejavu-core
+
+CentOS/RHEL/Rocky:
+$ sudo dnf install -y git gcc gcc-c++ make curl wget nginx mariadb-server \
+  mariadb-devel openssl-devel libxml2-devel expat-devel pkgconfig \
+  perl-App-cpanminus wkhtmltopdf fontconfig dejavu-sans-fonts
+
+
+STEP 2: Install Node.js 20.x LTS
+---------------------------------
+Using NodeSource repository:
+
+$ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+$ sudo apt install -y nodejs
+
+Verify installation:
+$ node --version    # Should show v20.x.x
+$ npm --version     # Should show 10.x.x or higher
+
+
+STEP 3: Database Setup
+-----------------------
+Start and enable MariaDB:
+$ sudo systemctl start mariadb
+$ sudo systemctl enable mariadb
+
+Secure MariaDB installation:
+$ sudo mysql_secure_installation
+
+Answer prompts:
+  - Set root password: YES (choose strong password)
+  - Remove anonymous users: YES
+  - Disallow root login remotely: YES
+  - Remove test database: YES
+  - Reload privilege tables: YES
+
+Create database and user:
+$ sudo mariadb -u root -p
+
+Execute these SQL commands:
+
+CREATE DATABASE property_management
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'propman'@'localhost' IDENTIFIED BY 'YOUR_SECURE_PASSWORD';
+
+GRANT ALL PRIVILEGES ON property_management.* TO 'propman'@'localhost';
+
+FLUSH PRIVILEGES;
+
+EXIT;
+
+Load the database schema:
+$ mariadb -u propman -p property_management < /path/to/database/schema.sql
+
+Verify schema loaded:
+$ mariadb -u propman -p property_management -e "SHOW TABLES;"
+
+Expected tables:
+  company, exchange_rates, electricity_meters, invoice_items,
+  invoice_templates, invoices, meter_readings, received_invoices,
+  tenants, tenant_utility_percentages, users, utility_calculation_details,
+  utility_calculations, utility_providers
+
+
+STEP 4: Application User Setup
+-------------------------------
+Create dedicated system user for the application:
+
+$ sudo useradd -r -m -d /opt/property-manager -s /bin/bash propman
+$ sudo usermod -aG www-data propman
+
+
+STEP 5: Clone and Configure Application
+----------------------------------------
+Clone repository to /opt/property-manager:
+
+$ sudo -u propman git clone https://github.com/YOUR_USERNAME/property-management.git \
+  /opt/property-manager
+$ cd /opt/property-manager
+
+
+STEP 6: Backend Setup
+----------------------
+Navigate to backend directory:
+$ cd /opt/property-manager/backend
+
+Install Perl dependencies:
+$ sudo cpanm --notest DBD::MariaDB
+$ sudo cpanm --installdeps . --notest
+
+This will install all required CPAN modules listed in cpanfile:
+  - Dancer2, Plack, Starman
+  - DBIx::Class, DBD::MariaDB
+  - Crypt::Bcrypt, Crypt::JWT
+  - PDF::API2, XML::LibXML
+  - And all other dependencies
+
+Create production configuration:
+$ sudo cp environments/production.yml environments/production.yml.local
+$ sudo nano environments/production.yml.local
+
+Update these critical settings:
+
+plugins:
+  DBIC:
+    default:
+      dsn: "dbi:MariaDB:database=property_management;host=localhost;port=3306"
+      user: "propman"
+      password: "YOUR_DATABASE_PASSWORD"
+
+cors:
+  allowed_origins:
+    - "https://yourdomain.com"
+    - "https://www.yourdomain.com"
+
+app:
+  jwt_secret: "YOUR_LONG_RANDOM_JWT_SECRET"
+
+Generate JWT secret:
+$ openssl rand -hex 32
+
+Create log directory:
+$ sudo mkdir -p /var/log/propertymanager
+$ sudo chown propman:propman /var/log/propertymanager
+
+Create PDF temp directory:
+$ sudo mkdir -p /tmp/property_invoices
+$ sudo chown propman:propman /tmp/property_invoices
+$ sudo chmod 755 /tmp/property_invoices
+
+Test backend manually:
+$ cd /opt/property-manager/backend
+$ plackup -p 5000 bin/app.psgi
+
+Access http://your-server:5000/api/health
+Expected: {"status":"ok","database":"connected"}
+
+Press Ctrl+C to stop.
+
+
+STEP 7: Frontend Setup
+-----------------------
+Navigate to frontend directory:
+$ cd /opt/property-manager/frontend
+
+Install Node.js dependencies:
+$ sudo -u propman npm ci
+
+This installs all dependencies from package-lock.json.
+
+Build production frontend:
+$ sudo -u propman npm run build
+
+This creates optimized production build in dist/ directory.
+
+The build process:
+  - Bundles React application
+  - Minifies JavaScript and CSS
+  - Optimizes assets
+  - Generates production-ready static files
+
+
+STEP 8: Configure Nginx Web Server
+-----------------------------------
+Create Nginx configuration:
+
+$ sudo nano /etc/nginx/sites-available/property-manager
+
+Paste this configuration:
+
+# Property Management Application
+server {
+    listen 80;
+    listen [::]:80;
+    server_name yourdomain.com www.yourdomain.com;
+
+    # Redirect HTTP to HTTPS (uncomment after SSL setup)
+    # return 301 https://$server_name$request_uri;
+
+    root /opt/property-manager/frontend/dist;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    gzip_min_length 1000;
+
+    # API proxy to backend
+    location /api/ {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeout settings
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+
+        # WebSocket support (if needed)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # SPA routing - serve index.html for all non-file requests
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+    }
+
+    # Logs
+    access_log /var/log/nginx/property-manager-access.log;
+    error_log /var/log/nginx/property-manager-error.log;
+}
+
+Enable the site:
+$ sudo ln -s /etc/nginx/sites-available/property-manager /etc/nginx/sites-enabled/
+
+Test Nginx configuration:
+$ sudo nginx -t
+
+Expected output: "syntax is ok" and "test is successful"
+
+Reload Nginx:
+$ sudo systemctl reload nginx
+
+
+STEP 9: Create Systemd Service for Backend
+-------------------------------------------
+Create systemd service file:
+
+$ sudo nano /etc/systemd/system/property-manager.service
+
+Paste this configuration:
+
+[Unit]
+Description=Property Manager Backend API
+After=network.target mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=simple
+User=propman
+Group=propman
+WorkingDirectory=/opt/property-manager/backend
+Environment="DANCER_ENVIRONMENT=production"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+# Main process
+ExecStart=/usr/bin/plackup -p 5000 -s Starman --workers=4 bin/app.psgi
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10s
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/propertymanager /tmp/property_invoices
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=property-manager
+
+[Install]
+WantedBy=multi-user.target
+
+Reload systemd and enable service:
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable property-manager
+$ sudo systemctl start property-manager
+
+Check service status:
+$ sudo systemctl status property-manager
+
+View logs:
+$ sudo journalctl -u property-manager -f
+
+
+STEP 10: Configure Firewall
+----------------------------
+Ubuntu/Debian (ufw):
+$ sudo ufw allow 80/tcp
+$ sudo ufw allow 443/tcp
+$ sudo ufw enable
+
+CentOS/RHEL/Rocky (firewalld):
+$ sudo firewall-cmd --permanent --add-service=http
+$ sudo firewall-cmd --permanent --add-service=https
+$ sudo firewall-cmd --reload
+
+
+STEP 11: SSL/HTTPS Setup with Let's Encrypt
+--------------------------------------------
+Install certbot:
+
+Ubuntu/Debian:
+$ sudo apt install -y certbot python3-certbot-nginx
+
+CentOS/RHEL/Rocky:
+$ sudo dnf install -y certbot python3-certbot-nginx
+
+Obtain SSL certificate:
+$ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+
+Follow prompts:
+  - Enter email address
+  - Agree to Terms of Service
+  - Choose redirect option (option 2 recommended)
+
+Certbot will automatically:
+  - Obtain SSL certificate
+  - Modify Nginx configuration
+  - Set up auto-renewal
+
+Test auto-renewal:
+$ sudo certbot renew --dry-run
+
+Certificates will auto-renew via systemd timer.
+
+
+STEP 12: Post-Installation Verification
+----------------------------------------
+1. Access application: https://yourdomain.com
+2. Login with default credentials (admin / Admin123!)
+3. Change admin password immediately
+4. Configure company information
+5. Test all functionality
+
+Check services are running:
+$ sudo systemctl status property-manager
+$ sudo systemctl status nginx
+$ sudo systemctl status mariadb
+
+Check logs for errors:
+$ sudo journalctl -u property-manager --since "10 minutes ago"
+$ sudo tail -f /var/log/nginx/property-manager-error.log
+
+
+--------------------------------------------------------------------------------
+B.3 PRODUCTION MAINTENANCE
+--------------------------------------------------------------------------------
+
+Regular Maintenance Tasks:
+
+1. Daily:
+   - Monitor application logs
+   - Check service status
+   - Verify backups completed
+
+2. Weekly:
+   - Review error logs
+   - Check disk space
+   - Test backup restores
+
+3. Monthly:
+   - Update system packages
+   - Review security updates
+   - Audit user accounts
+
+Database Backups:
+
+Create backup script (/opt/backup-property-db.sh):
+
+#!/bin/bash
+BACKUP_DIR="/opt/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+FILENAME="property_management_$DATE.sql.gz"
+
+mkdir -p $BACKUP_DIR
+mariadb-dump -u propman -p'YOUR_PASSWORD' property_management | gzip > $BACKUP_DIR/$FILENAME
+
+# Keep only last 30 days of backups
+find $BACKUP_DIR -name "property_management_*.sql.gz" -mtime +30 -delete
+
+Make executable:
+$ sudo chmod +x /opt/backup-property-db.sh
+
+Add to crontab (daily at 2 AM):
+$ sudo crontab -e
+0 2 * * * /opt/backup-property-db.sh
+
+Application Updates:
+
+$ cd /opt/property-manager
+$ sudo -u propman git pull origin main
+
+Backend updates:
+$ cd backend
+$ sudo cpanm --installdeps . --notest
+$ sudo systemctl restart property-manager
+
+Frontend updates:
+$ cd frontend
+$ sudo -u propman npm ci
+$ sudo -u propman npm run build
+$ sudo systemctl reload nginx
+
+
+================================================================================
+SECTION C: DEVELOPMENT ENVIRONMENT SETUP
+================================================================================
+This section is for developers who want to contribute or modify the application.
+
+--------------------------------------------------------------------------------
+C.1 DEVELOPMENT PREREQUISITES
+--------------------------------------------------------------------------------
+
+Required Software:
+  - Perl 5.32+
+  - MariaDB 10.6+ or MySQL 8.0+
+  - Node.js 20.x LTS
+  - Git
+  - Text Editor/IDE (VSCode, Vim, etc.)
+
+Recommended Tools:
+  - Docker Desktop (for testing Docker deployment)
+  - Postman or curl (for API testing)
+  - MariaDB client or DBeaver (for database management)
+
+
+--------------------------------------------------------------------------------
+C.2 LOCAL DEVELOPMENT SETUP
+--------------------------------------------------------------------------------
+
+STEP 1: Clone Repository
+-------------------------
+$ git clone https://github.com/YOUR_USERNAME/property-management.git
+$ cd property-management
+
+
+STEP 2: Database Setup for Development
+---------------------------------------
+Create development database:
+
+$ mariadb -u root -p
+
+CREATE DATABASE property_management
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'propman'@'localhost' IDENTIFIED BY 'secure_dev_password';
+
+GRANT ALL PRIVILEGES ON property_management.* TO 'propman'@'localhost';
+
+FLUSH PRIVILEGES;
+
+EXIT;
+
+Load schema:
+$ mariadb -u propman -p property_management < database/schema.sql
+
+Load development seed data:
+$ mariadb -u propman -p property_management < database/seeds/development.sql
+
+
+STEP 3: Backend Development Setup
+----------------------------------
+Navigate to backend:
+$ cd backend
+
+Configure database connection:
+Edit environments/development.yml and update:
+
+plugins:
+  DBIC:
+    default:
+      dsn: "dbi:MariaDB:database=property_management;host=127.0.0.1;port=3306"
+      user: "propman"
+      password: "secure_dev_password"
+
+Install Perl dependencies:
+$ cpanm --notest DBD::MariaDB
+$ cpanm --installdeps . --notest
+
+Run backend in development mode:
+$ DANCER_ENVIRONMENT=development plackup -p 5000 -R . bin/app.psgi
+
+The -R . flag enables auto-reload when files change.
+
+Backend is now running at: http://localhost:5000
+API health check: http://localhost:5000/api/health
+
+
+STEP 4: Frontend Development Setup
+-----------------------------------
+Open new terminal, navigate to frontend:
+$ cd frontend
+
+Install dependencies:
+$ npm install
+
+Configure API proxy (vite.config.js should already have):
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      }
+    }
+  }
+})
+
+Start development server:
+$ npm run dev
+
+Frontend is now running at: http://localhost:5173
+Hot Module Replacement (HMR) is enabled for instant updates.
+
+
+STEP 5: Development Workflow
+-----------------------------
+You now have:
+  - Backend API: http://localhost:5000
+  - Frontend Dev Server: http://localhost:5173
+  - Database: localhost:3306
+
+Login credentials:
+  Username: admin
+  Password: Admin123!
+
+Development features:
+  - Backend auto-reloads on Perl file changes
+  - Frontend has instant HMR for React changes
+  - Detailed error messages and stack traces
+  - SQL query debugging (check logs)
+
+
+--------------------------------------------------------------------------------
+C.3 LOADING/RELOADING SEED DATA IN DEVELOPMENT
+--------------------------------------------------------------------------------
+
+To reload seed data (WARNING: Deletes all existing data!):
+
+$ cd /path/to/property-management
+
+Drop and recreate database:
+$ mariadb -u root -p << EOF
+DROP DATABASE IF EXISTS property_management;
+CREATE DATABASE property_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON property_management.* TO 'propman'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+
+Reload schema and seed data:
+$ mariadb -u propman -p property_management < database/schema.sql
+$ mariadb -u propman -p property_management < database/seeds/development.sql
+
+Restart backend for fresh database connection:
+$ # Ctrl+C in backend terminal, then restart
+$ cd backend
+$ DANCER_ENVIRONMENT=development plackup -p 5000 -R . bin/app.psgi
+
+
+--------------------------------------------------------------------------------
+C.4 RUNNING TESTS
+--------------------------------------------------------------------------------
+
+Backend tests:
+$ cd backend
+$ prove -lv t/
+
+Run specific test file:
+$ prove -lv t/001_base.t
+
+Frontend tests (if configured):
+$ cd frontend
+$ npm test
+
+
+--------------------------------------------------------------------------------
+C.5 DEVELOPMENT TOOLS & TIPS
+--------------------------------------------------------------------------------
+
+API Testing with curl:
+
+Login:
+$ curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin123!"}'
+
+Save token to variable:
+$ TOKEN="eyJhbGc..."
+
+Make authenticated request:
+$ curl http://localhost:5000/api/tenants \
+  -H "Authorization: Bearer $TOKEN"
+
+Database inspection:
+$ mariadb -u propman -p property_management
+
+Show tables:
+MariaDB> SHOW TABLES;
+
+Describe table:
+MariaDB> DESCRIBE tenants;
+
+Query data:
+MariaDB> SELECT * FROM users;
+
+View backend logs:
+Backend logs to STDOUT when running with plackup.
+Look for SQL queries when debug_sql: true in development.yml
+
+Frontend browser DevTools:
+  - Network tab: Monitor API requests
+  - Console: Check for JavaScript errors
+  - React DevTools: Inspect component state
+
+
+================================================================================
+SECTION D: DATABASE MANAGEMENT
+================================================================================
+
+--------------------------------------------------------------------------------
+D.1 DATABASE SCHEMA OVERVIEW
+--------------------------------------------------------------------------------
+
+Core Tables:
+  - users: Authentication and user accounts
+  - company: Company information for invoices
+  - tenants: Tenant/client information
+  - utility_providers: Service providers (electricity, gas, water, etc.)
+  - received_invoices: Invoices received from utility providers
+  - invoices: Generated invoices sent to tenants
+  - invoice_items: Line items for generated invoices
+  - electricity_meters: Electricity meter definitions
+  - meter_readings: Monthly meter readings
+  - utility_calculations: Utility cost calculations per period
+  - utility_calculation_details: Tenant shares per utility
+  - tenant_utility_percentages: Default utility percentages per tenant
+  - exchange_rates: EUR/RON exchange rates (cached from BNR)
+  - invoice_templates: HTML templates for PDF generation
+
+Default Data (Created by schema.sql):
+  - Default admin user (username: admin, password: Admin123!)
+  - Two general electricity meters required for the system
+
+
+--------------------------------------------------------------------------------
+D.2 BACKUP AND RESTORE
+--------------------------------------------------------------------------------
+
+Create Backup:
+$ mariadb-dump -u propman -p property_management > backup_$(date +%Y%m%d).sql
+
+Compressed backup:
+$ mariadb-dump -u propman -p property_management | gzip > backup_$(date +%Y%m%d).sql.gz
+
+Restore from backup:
+$ mariadb -u propman -p property_management < backup_20251211.sql
+
+Restore from compressed:
+$ gunzip < backup_20251211.sql.gz | mariadb -u propman -p property_management
+
+Backup specific tables:
+$ mariadb-dump -u propman -p property_management users company > config_backup.sql
+
+
+--------------------------------------------------------------------------------
+D.3 DATABASE MIGRATIONS
+--------------------------------------------------------------------------------
+
+Migration files are in backend/migrations/:
+  - 001_add_previous_reading_value.sql
+  - 002_invoice_updates.sql
+  - 003_add_client_fields_to_invoices.sql
+  - 004_add_company_balance.sql
+
+These have already been applied to the schema.sql.
+When creating new migrations, document them in migrations/ directory.
+
+
+================================================================================
+SECTION E: TROUBLESHOOTING
+================================================================================
+
+--------------------------------------------------------------------------------
+E.1 COMMON DOCKER ISSUES
+--------------------------------------------------------------------------------
+
+Issue: "Container exits immediately"
+Solution:
+  $ docker compose logs backend
+  Check for Perl module installation errors or database connection issues.
+
+Issue: "Database connection refused"
+Solution:
+  Wait for database health check to pass:
+  $ docker compose ps
+  Wait until db container shows (healthy) status.
+
+Issue: "Port already in use"
+Solution:
+  Stop conflicting services:
+  $ sudo systemctl stop nginx  # if running locally
+  Or change ports in docker-compose.yml
+
+Issue: "Permission denied" errors
+Solution:
+  Fix volume permissions:
+  $ docker compose down
+  $ docker volume rm property_db_data
+  $ docker compose up -d
+
+
+--------------------------------------------------------------------------------
+E.2 COMMON PRODUCTION ISSUES
+--------------------------------------------------------------------------------
+
+Issue: "502 Bad Gateway"
+Solution:
+  Check backend service:
+  $ sudo systemctl status property-manager
+  $ sudo journalctl -u property-manager -n 50
+
+Issue: "Database connection failed"
+Solution:
+  Verify MariaDB is running:
+  $ sudo systemctl status mariadb
+  Test connection:
+  $ mariadb -u propman -p property_management
+  Check credentials in environments/production.yml.local
+
+Issue: "Permission denied writing PDFs"
+Solution:
+  Fix PDF temp directory permissions:
+  $ sudo mkdir -p /tmp/property_invoices
+  $ sudo chown propman:propman /tmp/property_invoices
+  $ sudo chmod 755 /tmp/property_invoices
+
+Issue: "Frontend shows blank page"
+Solution:
+  Check Nginx configuration:
+  $ sudo nginx -t
+  Verify build exists:
+  $ ls -la /opt/property-manager/frontend/dist/
+  Rebuild if needed:
+  $ cd /opt/property-manager/frontend
+  $ npm run build
+
+
+--------------------------------------------------------------------------------
+E.3 COMMON DEVELOPMENT ISSUES
+--------------------------------------------------------------------------------
+
+Issue: "Can't locate Module.pm in @INC"
+Solution:
+  Install missing Perl module:
+  $ cpanm Module::Name
+
+Issue: "DBD::MariaDB install fails"
+Solution:
+  Install MariaDB development libraries:
+  Ubuntu: $ sudo apt install libmariadb-dev libmariadb-dev-compat
+  CentOS: $ sudo dnf install mariadb-devel
+
+Issue: "Frontend npm install fails"
+Solution:
+  Clear npm cache:
+  $ npm cache clean --force
+  $ rm -rf node_modules package-lock.json
+  $ npm install
+
+Issue: "Backend doesn't auto-reload"
+Solution:
+  Ensure you're using -R . flag with plackup:
+  $ plackup -p 5000 -R . bin/app.psgi
+
+
+================================================================================
+ADDITIONAL RESOURCES
+================================================================================
+
+Application Documentation:
+  - API documentation: http://your-server/api/docs (if enabled)
+  - OpenAPI spec: backend/public/openapi.yaml
+
+Technology Documentation:
+  - Perl Dancer2: https://metacpan.org/pod/Dancer2
+  - React: https://react.dev/
+  - Vite: https://vitejs.dev/
+  - MariaDB: https://mariadb.org/documentation/
+  - Docker: https://docs.docker.com/
+
+Support:
+  - GitHub Issues: https://github.com/cristiparaschiv/property-management/issues
+
+================================================================================
+END OF DEPLOYMENT GUIDE
+================================================================================
