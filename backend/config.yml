@@ -1,0 +1,96 @@
+# PropertyManager - Main Configuration
+# Property Management & Invoicing System
+
+# Application settings
+appname: "PropertyManager"
+charset: "UTF-8"
+auto_page: false
+serializer: "JSON"
+
+# Session configuration
+session: "Simple"
+session_cookie_key: "change_this_to_a_random_string_in_production"
+
+# Template configuration
+template: "template_toolkit"
+engines:
+  template:
+    template_toolkit:
+      start_tag: '[%'
+      end_tag: '%]'
+      encoding: 'utf8'
+
+# Logger configuration
+logger: "console"
+log: "core"
+
+# Plugins configuration
+plugins:
+  DBIC:
+    default:
+      dsn: "dbi:MariaDB:database=property_management;host=127.0.0.1;port=3306"
+      schema_class: PropertyManager::Schema
+      user: "propman"
+      password: "secure_dev_password"
+      options:
+        RaiseError: 1
+        PrintError: 0
+        AutoCommit: 1
+        mariadb_init_command: "SET NAMES utf8mb4"
+
+# JWT Configuration
+jwt:
+  secret_key: "change_this_to_a_very_long_random_string_in_production"
+  algorithm: "HS256"
+  expiration: 86400  # 24 hours in seconds
+
+# CSRF Protection Configuration
+csrf:
+  enabled: true
+  expiration: 3600  # 1 hour in seconds (tokens should be refreshed)
+
+# Application-specific settings
+app:
+  # Invoice settings
+  invoice_prefix: "ARC"
+  invoice_number_padding: 5
+
+  # BNR Exchange Rate API
+  bnr_api_url: "https://www.bnr.ro/nbrfxrates.xml"
+
+  # PDF Settings
+  pdf_temp_dir: "/tmp/property_invoices"
+
+  # Pagination defaults
+  default_page_size: 20
+  max_page_size: 100
+
+  # Security settings
+  bcrypt_cost: 12
+  max_login_attempts: 5
+  lockout_duration: 900  # 15 minutes
+
+  # File upload limits
+  max_upload_size: 5242880  # 5MB in bytes
+
+# CORS Configuration (development only - see environments/production.yml)
+cors:
+  enabled: true
+  allowed_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed_headers:
+    - Content-Type
+    - Authorization
+    - X-Requested-With
+    - X-CSRF-Token
+  expose_headers:
+    - Content-Disposition
+  allow_credentials: true
+  max_age: 3600

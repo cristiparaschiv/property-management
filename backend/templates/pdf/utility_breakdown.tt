@@ -1,0 +1,66 @@
+<!-- Utility Breakdown Page - appears after the main invoice for utility invoices -->
+<div style="page-break-before: always;"></div>
+
+<div class="breakdown-page">
+    <!-- Company Header -->
+    <div class="breakdown-header">
+        <div class="company-name">[% company.name %]</div>
+        <div class="company-details">
+            C.I.F.: [% company.cui_cif %]<br>
+            [% company.address %], [% company.city %][% IF company.county %], [% company.county %][% END %]
+        </div>
+    </div>
+
+    <!-- CATRE Section -->
+    <div class="catre-section">
+        <div class="catre-label">CĂTRE</div>
+        <div class="catre-name">[% tenant.name %]</div>
+    </div>
+
+    <!-- Title -->
+    <div class="breakdown-title">
+        UTILITĂȚI - LUNA [% period_month_name %] [% period_year %]
+    </div>
+
+    <!-- Breakdown Table -->
+    <table class="breakdown-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;">Nr.</th>
+                <th style="width: 25%;">Denumire Furnizor</th>
+                <th style="width: 15%;">Factură</th>
+                <th style="width: 12%;">Data</th>
+                <th style="width: 13%;">Sumă totală</th>
+                <th style="width: 15%;">Cota ta</th>
+                <th style="width: 15%;">Procent</th>
+            </tr>
+        </thead>
+        <tbody>
+            [% SET row_num = 1 %]
+            [% FOREACH detail IN utility_details %]
+            <tr>
+                <td class="center">[% row_num %]</td>
+                <td>[% detail.provider_name %]</td>
+                <td>[% detail.invoice_number %]</td>
+                <td class="center">[% detail.invoice_date %]</td>
+                <td class="right">[% detail.total_amount %] RON</td>
+                <td class="right">[% detail.tenant_amount %] RON</td>
+                <td class="center">[% detail.percentage %]%</td>
+            </tr>
+            [% SET row_num = row_num + 1 %]
+            [% END %]
+        </tbody>
+    </table>
+
+    <!-- Total -->
+    <div class="breakdown-total">
+        <span class="total-label">TOTAL DE PLATĂ:</span>
+        <span class="total-value">[% formatted.total %] RON</span>
+    </div>
+
+    <!-- Administrator Signature -->
+    <div class="administrator-section">
+        <div class="admin-label">ADMINISTRATOR,</div>
+        <div class="admin-name">[% company.representative_name || company.name %]</div>
+    </div>
+</div>

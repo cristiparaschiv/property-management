@@ -1,0 +1,271 @@
+# ============================================================================
+# Systemd Service Unit for Property Management System Backend
+# ============================================================================
+# This service file manages the Perl Dancer2 backend application
+#
+# Installation:
+# 1. Copy this file to: /etc/systemd/system/property-manager.service
+# 2. Update User, Group, and paths if needed
+# 3. Reload systemd: sudo systemctl daemon-reload
+# 4. Enable service: sudo systemctl enable property-manager
+# 5. Start service: sudo systemctl start property-manager
+# 6. Check status: sudo systemctl status property-manager
+# ============================================================================
+
+[Unit]
+Description=Property Management System Backend API
+Documentation=https://github.com/your-org/property-management
+After=network.target mariadb.service mysql.service
+Wants=mariadb.service
+
+[Service]
+# ----------------------------------------------------------------------------
+# Service Type
+# ----------------------------------------------------------------------------
+Type=simple
+Restart=always
+RestartSec=10
+
+# Start service after 3 failed restarts within 5 minutes
+StartLimitInterval=300
+StartLimitBurst=5
+
+# ----------------------------------------------------------------------------
+# User and Group
+# ----------------------------------------------------------------------------
+# Run as dedicated service user (create with: sudo useradd -r -s /bin/bash propman)
+User=propman
+Group=propman
+
+# ----------------------------------------------------------------------------
+# Working Directory
+# ----------------------------------------------------------------------------
+WorkingDirectory=/opt/property-manager/app/backend
+
+# ----------------------------------------------------------------------------
+# Environment Variables
+# ----------------------------------------------------------------------------
+# Set production environment
+Environment="DANCER_ENVIRONMENT=production"
+Environment="PLACK_ENV=production"
+Environment="PERL5LIB=/opt/property-manager/app/backend/lib"
+
+# Load additional environment from file (if exists)
+EnvironmentFile=-/opt/property-manager/app/backend/.env
+
+# ----------------------------------------------------------------------------
+# Execution Command
+# ----------------------------------------------------------------------------
+# Using Starman PSGI server (high-performance)
+ExecStart=/usr/local/bin/plackup \
+    --server Starman \
+    --workers 4 \
+    --port 5000 \
+    --host 127.0.0.1 \
+    --app /opt/property-manager/app/backend/bin/app.psgi
+
+# Alternative: Using built-in server (simpler, less performant)
+# ExecStart=/usr/bin/perl /opt/property-manager/app/backend/bin/app.psgi
+
+# ----------------------------------------------------------------------------
+# Process Management
+# ----------------------------------------------------------------------------
+# Graceful shutdown timeout
+TimeoutStopSec=30
+
+# Send SIGTERM for graceful shutdown, then SIGKILL if needed
+KillMode=mixed
+KillSignal=SIGTERM
+
+# ----------------------------------------------------------------------------
+# Resource Limits
+# ----------------------------------------------------------------------------
+# Prevent memory leaks from consuming all system memory
+MemoryLimit=1G
+MemoryMax=2G
+
+# CPU quota (100% = 1 core, 200% = 2 cores)
+CPUQuota=200%
+
+# Maximum number of file descriptors
+LimitNOFILE=65536
+
+# Maximum number of processes
+LimitNPROC=4096
+
+# ----------------------------------------------------------------------------
+# Security Hardening
+# ----------------------------------------------------------------------------
+# These options enhance security by restricting what the service can access
+
+# Prevent gaining new privileges
+NoNewPrivileges=true
+
+# Restrict access to /home, /root, and /run/user
+ProtectHome=true
+
+# Make /usr, /boot, /efi read-only
+ProtectSystem=strict
+
+# Create private /tmp
+PrivateTmp=true
+
+# Restrict access to kernel tunables
+ProtectKernelTunables=true
+
+# Restrict access to kernel modules
+ProtectKernelModules=true
+
+# Restrict access to kernel logs
+ProtectKernelLogs=true
+
+# Restrict access to clock
+ProtectControlGroups=true
+
+# Restrict access to hostname
+ProtectHostname=false
+
+# Deny write access to system clock
+ProtectClock=true
+
+# Grant read-write access to application directories
+ReadWritePaths=/opt/property-manager/app/backend
+ReadWritePaths=/var/log/property-manager
+ReadWritePaths=/tmp/property_invoices
+
+# Restrict access to real home directories
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Restrict system calls
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# Set up a minimal /dev
+PrivateDevices=true
+
+# Restrict namespaces
+RestrictNamespaces=true
+
+# Restrict SUID/SGID
+RestrictSUIDSGID=true
+
+# Lock down personalities
+LockPersonality=true
+
+# Remove SYSLOG capability
+CapabilityBoundingSet=
+
+# Deny CAP_SYS_ADMIN
+SystemCallArchitectures=native
+
+# ----------------------------------------------------------------------------
+# Logging
+# ----------------------------------------------------------------------------
+# Logs will be available via journalctl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=property-manager
+
+# ----------------------------------------------------------------------------
+# Pre-Start Checks
+# ----------------------------------------------------------------------------
+# Ensure required directories exist
+ExecStartPre=/bin/mkdir -p /var/log/property-manager
+ExecStartPre=/bin/mkdir -p /tmp/property_invoices
+ExecStartPre=/bin/chown -R propman:propman /var/log/property-manager
+ExecStartPre=/bin/chown -R propman:propman /tmp/property_invoices
+
+# Wait for database to be ready
+ExecStartPre=/bin/sleep 2
+
+# ----------------------------------------------------------------------------
+# Health Monitoring
+# ----------------------------------------------------------------------------
+# Systemd will consider the service healthy if it stays running
+# For custom health checks, use a separate monitor service
+
+# Check service health every 60 seconds
+#ExecReload=/bin/kill -HUP $MAINPID
+#WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target
+
+# ============================================================================
+# Usage Instructions
+# ============================================================================
+#
+# Installation:
+# -------------
+# sudo cp property-manager.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable property-manager
+# sudo systemctl start property-manager
+#
+# Management:
+# -----------
+# Start:    sudo systemctl start property-manager
+# Stop:     sudo systemctl stop property-manager
+# Restart:  sudo systemctl restart property-manager
+# Reload:   sudo systemctl reload property-manager
+# Status:   sudo systemctl status property-manager
+# Enable:   sudo systemctl enable property-manager   # Start on boot
+# Disable:  sudo systemctl disable property-manager  # Don't start on boot
+#
+# Logs:
+# -----
+# View logs:           sudo journalctl -u property-manager
+# Follow logs:         sudo journalctl -u property-manager -f
+# Recent logs:         sudo journalctl -u property-manager -n 100
+# Logs since boot:     sudo journalctl -u property-manager -b
+# Logs with timestamp: sudo journalctl -u property-manager --since "1 hour ago"
+#
+# Debugging:
+# ----------
+# If service fails to start:
+# 1. Check status: sudo systemctl status property-manager
+# 2. View logs: sudo journalctl -u property-manager -n 50
+# 3. Verify paths: ls -la /opt/property-manager/app/backend/bin/app.psgi
+# 4. Check user: id propman
+# 5. Test manually: cd /opt/property-manager/app/backend && plackup -p 5000 bin/app.psgi
+# 6. Check permissions: sudo -u propman bash -c "cd /opt/property-manager/app/backend && plackup -p 5000 bin/app.psgi"
+#
+# Performance Monitoring:
+# -----------------------
+# CPU/Memory usage: systemctl status property-manager
+# Detailed stats:   systemd-cgtop
+# Process tree:     systemctl status property-manager -l
+#
+# Security Audit:
+# ---------------
+# Check security settings: systemd-analyze security property-manager
+#
+# Prerequisites:
+# --------------
+# 1. Create service user:
+#    sudo useradd -r -m -d /opt/property-manager -s /bin/bash propman
+#
+# 2. Install Starman PSGI server:
+#    sudo cpanm Starman
+#
+# 3. Ensure plackup is in PATH:
+#    which plackup
+#    # If not found: sudo cpanm Plack
+#
+# 4. Set up log directory:
+#    sudo mkdir -p /var/log/property-manager
+#    sudo chown -R propman:propman /var/log/property-manager
+#
+# 5. Set up PDF temp directory:
+#    sudo mkdir -p /tmp/property_invoices
+#    sudo chown -R propman:propman /tmp/property_invoices
+#
+# Customization:
+# --------------
+# - Adjust workers count based on CPU cores (--workers N)
+# - Adjust port if needed (default: 5000)
+# - Adjust resource limits (MemoryLimit, CPUQuota)
+# - Add custom environment variables in .env file
+# - Modify security hardening options based on requirements
+#
+# ============================================================================

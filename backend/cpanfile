@@ -1,0 +1,66 @@
+# PropertyManager - Perl Dependencies
+# Property Management & Invoicing System
+
+# Core Dancer2 Framework
+requires 'Dancer2', '>= 1.0.0';
+requires 'Dancer2::Plugin::DBIC';
+
+# Database
+requires 'DBIx::Class';
+requires 'DBD::MariaDB';  # Use MariaDB driver (compatible with MySQL protocol)
+
+# Authentication & Security
+requires 'Crypt::Bcrypt';
+requires 'Crypt::JWT';
+requires 'Session::Token';
+
+# JSON Processing
+requires 'JSON::XS';
+requires 'JSON::MaybeXS';
+
+# XML Processing (for BNR exchange rates)
+requires 'XML::LibXML';
+
+# HTTP Client
+requires 'LWP::UserAgent';
+requires 'LWP::Protocol::https';
+
+# PDF Generation
+requires 'PDF::API2';
+requires 'PDF::Table';
+requires 'IPC::Run3';  # For wkhtmltopdf execution
+
+# Template Processing
+requires 'Template';
+
+# Date & Time
+requires 'DateTime';
+requires 'DateTime::Format::MySQL';
+requires 'DateTime::Format::ISO8601';
+
+# Validation
+requires 'Type::Tiny';
+
+# Error Handling
+requires 'Try::Tiny';
+
+# Logging
+requires 'Log::Log4perl';
+
+# Utilities
+requires 'Plack';
+requires 'Starman';  # Production PSGI server
+requires 'List::Util';
+requires 'List::MoreUtils';
+requires 'File::Slurp';
+requires 'Digest::SHA';
+requires 'MIME::Base64';
+
+# Development & Testing
+on 'test' => sub {
+    requires 'Test::More';
+    requires 'Test::Deep';
+    requires 'Test::Exception';
+    requires 'Plack::Test';
+    requires 'HTTP::Request::Common';
+};

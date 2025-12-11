@@ -1,0 +1,83 @@
+# Production Environment Configuration
+
+# Production mode settings
+startup_info: 0
+show_errors: 0
+traces: 0
+warnings: 0
+
+# Logger configuration for production
+logger: "file"
+log: "warning"
+logger_format: "%t [%L] %m in %f l. %l"
+access_log: 1
+
+engines:
+  logger:
+    file:
+      log_dir: "/var/log/propertymanager"
+      file_name: "app.log"
+
+# Database connection for production
+# IMPORTANT: Override these values using environment variables in production
+plugins:
+  DBIC:
+    default:
+      dsn: "dbi:MariaDB:database=property_management;host=db;port=3306"
+      schema_class: PropertyManager::Schema
+      user: "propman"
+      password: "CHANGE_ME_IN_PRODUCTION"
+      options:
+        RaiseError: 1
+        PrintError: 0
+        AutoCommit: 1
+        mariadb_init_command: "SET NAMES utf8mb4; SET sql_mode='STRICT_TRANS_TABLES'"
+        # Connection pool settings
+        mariadb_auto_reconnect: 1
+
+# CORS - Restrict to specific origins in production
+cors:
+  enabled: true
+  allowed_origins:
+    - "https://yourdomain.com"
+    - "https://www.yourdomain.com"
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed_headers:
+    - Content-Type
+    - Authorization
+    - X-Requested-With
+    - X-CSRF-Token
+  expose_headers:
+    - Content-Disposition
+    - X-Total-Count
+  allow_credentials: true
+  max_age: 7200
+
+# Production-specific settings
+app:
+  # Standard JWT expiration
+  jwt_expiration: 28800  # 8 hours
+
+  # Production bcrypt cost
+  bcrypt_cost: 12
+
+  # Enable rate limiting in production
+  rate_limiting_enabled: true
+  max_requests_per_minute: 60
+
+  # Disable debug features
+  debug_mode: false
+  debug_sql: false
+
+  # Security headers
+  security_headers:
+    X-Frame-Options: "DENY"
+    X-Content-Type-Options: "nosniff"
+    X-XSS-Protection: "1; mode=block"
+    Referrer-Policy: "strict-origin-when-cross-origin"
+    Strict-Transport-Security: "max-age=31536000; includeSubDomains"

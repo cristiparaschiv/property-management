@@ -1,0 +1,319 @@
+# ============================================================================
+# Property Management Application - Git Ignore Configuration
+# ============================================================================
+# This file excludes sensitive data, build artifacts, dependencies,
+# and environment-specific files from version control
+# ============================================================================
+
+# ============================================================================
+# Documentation Files (User will create their own)
+# ============================================================================
+*.md
+!cpanfile.snapshot
+*.txt
+
+# ============================================================================
+# Environment & Secrets
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+credentials.json
+secrets.yml
+config/secrets.yml
+config/production.yml.local
+
+# ============================================================================
+# Database Files
+# ============================================================================
+*.sql.gz
+*.sql.bak
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+dumps/
+backups/
+database/backups/
+
+# ============================================================================
+# Logs
+# ============================================================================
+*.log
+logs/
+*.log.*
+log/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================================================
+# Operating System Files
+# ============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.directory
+.fuse_hidden*
+.nfs*
+
+# ============================================================================
+# IDE & Editor Files
+# ============================================================================
+# VSCode
+.vscode/
+.vscode-test/
+*.code-workspace
+.history/
+
+# IntelliJ IDEA / WebStorm / PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+.sublime/
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+.*.sw?
+Session.vim
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+.elc
+auto-save-list
+tramp
+
+# Eclipse
+.project
+.classpath
+.settings/
+.buildpath
+
+# NetBeans
+nbproject/
+build/
+nbbuild/
+dist/
+nbdist/
+
+# Atom
+.atom/
+
+# ============================================================================
+# Node.js / Frontend
+# ============================================================================
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Build outputs
+dist/
+build/
+.cache/
+.parcel-cache/
+.next/
+out/
+.nuxt/
+.vuepress/dist
+.serverless/
+.fusebox/
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Yarn
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# ============================================================================
+# Perl / Backend
+# ============================================================================
+# CPAN build artifacts
+blib/
+_build/
+Build
+Build.PL
+!Build/
+*.bs
+MYMETA.*
+.build/
+pm_to_blib
+nytprof.out
+nytprof/
+
+# Carton
+local/
+.carton/
+
+# cpanm
+cpanm/
+.cpanm/
+
+# Perl coverage
+cover_db/
+*.gcov
+*.gcda
+*.gcno
+
+# Perl compiled files
+*.o
+*.so
+*.dylib
+*.bundle
+
+# ============================================================================
+# Docker Volumes & Generated Data
+# ============================================================================
+docker-compose.override.yml
+volumes/
+data/
+mysql-data/
+mariadb-data/
+postgres-data/
+
+# ============================================================================
+# Temporary Files
+# ============================================================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cache
+.cache/
+
+# PDF temporary files
+pdf_temp/
+invoices/
+generated_invoices/
+/tmp/property_invoices/
+
+# ============================================================================
+# Test Files
+# ============================================================================
+test-results/
+coverage/
+.coverage
+htmlcov/
+*.cover
+.pytest_cache/
+.tox/
+
+# ============================================================================
+# Package Manager Lock Files (Keep These)
+# ============================================================================
+# We keep lock files for reproducible builds
+# !package-lock.json
+# !yarn.lock
+# !pnpm-lock.yaml
+# !Gemfile.lock
+# !cpanfile.snapshot
+
+# ============================================================================
+# Misc
+# ============================================================================
+.sass-cache/
+*.pid
+*.seed
+*.pid.lock
+.grunt/
+bower_components/
+.lock-wscript
+typings/
+.npm
+.node_repl_history
+
+# Claude AI project files (optional - uncomment if you don't want to commit)
+.claude/
+
+# ============================================================================
+# Application-Specific Exclusions
+# ============================================================================
+# Screenshots and images (user documentation)
+*.png
+*.jpg
+*.jpeg
+*.gif
+!public/**/*.png
+!public/**/*.jpg
+!public/**/*.jpeg
+!public/**/*.gif
+!frontend/public/**/*.png
+!frontend/public/**/*.jpg
+!frontend/public/**/*.jpeg
+!frontend/public/**/*.gif
+
+# Local development databases
+property_management_backup_*.sql
+
+# Generated API documentation
+api-docs/
+swagger-ui/
+
+# ============================================================================
+# Keep These Important Files
+# ============================================================================
+!.gitignore
+!.gitkeep
+!.dockerignore

@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # MariaDB Database
+  db:
+    image: mariadb:10.11
+    container_name: property-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-property_management}
+      MYSQL_USER: ${DB_USER:-propman}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change_this_password}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Uncomment the line below to load development seed data (demo tenants, invoices, etc.)
+      # - ./database/seeds/development.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - property-network
+
+  # Perl Dancer2 Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: property-backend
+    restart: unless-stopped
+    environment:
+      DANCER_ENVIRONMENT: ${ENVIRONMENT:-docker}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-property_management}
+      DB_USER: ${DB_USER:-propman}
+      DB_PASSWORD: ${DB_PASSWORD:-change_this_password}
+      JWT_SECRET: ${JWT_SECRET:-change_this_to_a_very_long_random_string_in_production}
+    volumes:
+      - ./backend:/app
+      - pdf_temp:/tmp/property_invoices
+    ports:
+      - "5001:5000"  # External:Internal - use 5001 to avoid conflict with local dev
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - property-network
+
+  # React Frontend (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: property-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - property-network
+
+volumes:
+  db_data:
+    driver: local
+  pdf_temp:
+    driver: local
+
+networks:
+  property-network:
+    driver: bridge

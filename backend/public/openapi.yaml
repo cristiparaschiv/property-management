@@ -1,0 +1,1423 @@
+openapi: 3.0.3
+info:
+  title: PropertyManager API
+  description: |
+    REST API for Property Management System.
+
+    This API provides endpoints for managing:
+    - User authentication (JWT-based)
+    - Company information
+    - Tenants and their utility percentages
+    - Utility providers
+    - Received invoices from utility providers
+    - Electricity meters and readings
+    - Utility cost calculations
+    - Rent and utility invoices with PDF generation
+    - Exchange rates (BNR)
+    - Dashboard metrics and reports
+
+    ## Authentication
+
+    Most endpoints require authentication via JWT token. Include the token in the `Authorization` header:
+    ```
+    Authorization: Bearer <your-token>
+    ```
+
+    ## Currency Handling
+
+    - Rent amounts are stored in EUR
+    - Display amounts are calculated in RON using BNR exchange rates
+    - Exchange rates are fetched daily from the Romanian National Bank (BNR)
+
+  version: 1.0.0
+  contact:
+    name: Property Management System
+    email: admin@property.local
+
+servers:
+  - url: http://localhost:5000
+    description: Development server
+  - url: http://localhost:3000
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Company
+    description: Company information management
+  - name: Tenants
+    description: Tenant CRUD operations and utility percentages
+  - name: Utility Providers
+    description: Utility provider management
+  - name: Received Invoices
+    description: Track invoices received from utility providers
+  - name: Meters
+    description: Electricity meter management
+  - name: Meter Readings
+    description: Meter reading entry and consumption tracking
+  - name: Utility Calculations
+    description: Calculate utility costs per tenant
+  - name: Invoices
+    description: Generate and manage rent/utility invoices
+  - name: Templates
+    description: Invoice template management
+  - name: Exchange Rates
+    description: BNR EUR/RON exchange rates
+  - name: Dashboard
+    description: Dashboard metrics and statistics
+  - name: Reports
+    description: Generate various reports
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Error message"
+        code:
+          type: string
+          example: "ERROR_CODE"
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: "admin"
+        email:
+          type: string
+          format: email
+          example: "admin@property.local"
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "admin"
+        password:
+          type: string
+          format: password
+          example: "changeme"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiJ9..."
+            user:
+              $ref: '#/components/schemas/User'
+
+    Company:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Property Management SRL"
+        cui_cif:
+          type: string
+          example: "RO12345678"
+        j_number:
+          type: string
+          nullable: true
+          example: "J40/1234/2025"
+        address:
+          type: string
+          example: "123 Main Street"
+        city:
+          type: string
+          example: "Bucharest"
+        county:
+          type: string
+          example: "Bucharest"
+        postal_code:
+          type: string
+          nullable: true
+          example: "012345"
+        bank_name:
+          type: string
+          nullable: true
+          example: "BCR"
+        iban:
+          type: string
+          nullable: true
+          example: "RO49AAAA1B31007593840000"
+        phone:
+          type: string
+          nullable: true
+          example: "0212345678"
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: "company@example.com"
+
+    CompanyInput:
+      type: object
+      required:
+        - name
+        - cui_cif
+        - address
+        - city
+        - county
+      properties:
+        name:
+          type: string
+        cui_cif:
+          type: string
+        j_number:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        county:
+          type: string
+        postal_code:
+          type: string
+        bank_name:
+          type: string
+        iban:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "John Doe"
+        cui_cnp:
+          type: string
+          nullable: true
+          example: "1234567890123"
+        j_number:
+          type: string
+          nullable: true
+          example: "J40/5678/2024"
+        address:
+          type: string
+          example: "456 Tenant Street"
+        city:
+          type: string
+          example: "Bucharest"
+        county:
+          type: string
+          example: "Bucharest"
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        rent_amount_eur:
+          type: number
+          format: decimal
+          example: 500.00
+        contract_start:
+          type: string
+          format: date
+          example: "2025-01-01"
+        contract_end:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: integer
+          enum: [0, 1]
+          example: 1
+        percentages:
+          type: object
+          additionalProperties:
+            type: number
+          example:
+            electricity: 40.00
+            gas: 35.00
+            water: 30.00
+            salubrity: 40.00
+
+    TenantInput:
+      type: object
+      required:
+        - name
+        - address
+        - city
+        - county
+      properties:
+        name:
+          type: string
+        cui_cnp:
+          type: string
+        j_number:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        county:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        rent_amount_eur:
+          type: number
+          format: decimal
+        contract_start:
+          type: string
+          format: date
+        contract_end:
+          type: string
+          format: date
+        is_active:
+          type: integer
+          enum: [0, 1]
+
+    UtilityPercentages:
+      type: object
+      properties:
+        percentages:
+          type: object
+          additionalProperties:
+            type: number
+          example:
+            electricity: 40.00
+            gas: 35.00
+            water: 30.00
+            salubrity: 40.00
+
+    UtilityProvider:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: "ENEL"
+        type:
+          type: string
+          enum: [electricity, gas, water, salubrity, internet, other]
+        account_number:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        is_active:
+          type: integer
+          enum: [0, 1]
+
+    ReceivedInvoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        provider_id:
+          type: integer
+        invoice_number:
+          type: string
+          example: "INV-2025-001"
+        invoice_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        amount:
+          type: number
+          format: decimal
+          example: 1500.00
+        utility_type:
+          type: string
+          enum: [electricity, gas, water, salubrity, internet, other]
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        is_paid:
+          type: integer
+          enum: [0, 1]
+        paid_date:
+          type: string
+          format: date
+          nullable: true
+
+    ElectricityMeter:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: "Main Meter"
+        location:
+          type: string
+          example: "Building Entrance"
+        tenant_id:
+          type: integer
+          nullable: true
+        is_general:
+          type: integer
+          enum: [0, 1]
+        meter_number:
+          type: string
+          example: "MTR001234"
+        is_active:
+          type: integer
+          enum: [0, 1]
+
+    MeterReading:
+      type: object
+      properties:
+        id:
+          type: integer
+        meter_id:
+          type: integer
+        reading_date:
+          type: string
+          format: date
+        reading_value:
+          type: number
+          format: decimal
+          example: 12500.50
+        consumption:
+          type: number
+          format: decimal
+          nullable: true
+          example: 350.00
+        period_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        period_year:
+          type: integer
+          example: 2025
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoice_number:
+          type: string
+          example: "ARC00001"
+        invoice_type:
+          type: string
+          enum: [rent, utility]
+        tenant_id:
+          type: integer
+        invoice_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        exchange_rate:
+          type: number
+          format: decimal
+          example: 4.9750
+        exchange_rate_date:
+          type: string
+          format: date
+        subtotal_eur:
+          type: number
+          format: decimal
+          nullable: true
+        subtotal_ron:
+          type: number
+          format: decimal
+        vat_amount:
+          type: number
+          format: decimal
+        total_ron:
+          type: number
+          format: decimal
+        is_paid:
+          type: integer
+          enum: [0, 1]
+        paid_date:
+          type: string
+          format: date
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceItem'
+
+    InvoiceItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoice_id:
+          type: integer
+        description:
+          type: string
+          example: "Monthly Rent - December 2025"
+        quantity:
+          type: number
+          format: decimal
+          example: 1.00
+        unit_price:
+          type: number
+          format: decimal
+          example: 2487.50
+        vat_rate:
+          type: number
+          format: decimal
+          example: 0.00
+        total:
+          type: number
+          format: decimal
+          example: 2487.50
+        sort_order:
+          type: integer
+
+    RentInvoiceInput:
+      type: object
+      required:
+        - tenant_id
+      properties:
+        tenant_id:
+          type: integer
+        invoice_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        notes:
+          type: string
+
+    InvoiceItemInput:
+      type: object
+      required:
+        - description
+        - quantity
+        - unit_price
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+        unit_price:
+          type: number
+          format: decimal
+        vat_rate:
+          type: number
+          format: decimal
+          default: 0
+
+    ExchangeRate:
+      type: object
+      properties:
+        rate:
+          type: number
+          format: decimal
+          example: 4.9750
+        date:
+          type: string
+          format: date
+          example: "2025-12-09"
+        source:
+          type: string
+          example: "BNR"
+        cached:
+          type: boolean
+        fallback:
+          type: boolean
+
+    DashboardMetrics:
+      type: object
+      properties:
+        total_tenants:
+          type: integer
+        active_tenants:
+          type: integer
+        total_invoices_this_month:
+          type: integer
+        unpaid_invoices:
+          type: integer
+        total_revenue_this_month:
+          type: number
+          format: decimal
+        pending_received_invoices:
+          type: integer
+        current_exchange_rate:
+          $ref: '#/components/schemas/ExchangeRate'
+
+paths:
+  # ============================================================================
+  # Authentication
+  # ============================================================================
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and receive JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Logout current user (client should discard token)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+
+  /api/auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Get information about the currently authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change password
+      description: Change the password for the authenticated user
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_password
+                - new_password
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                new_password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          description: Invalid current password or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================================
+  # Company
+  # ============================================================================
+  /api/company:
+    get:
+      tags:
+        - Company
+      summary: Get company information
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Company information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      company:
+                        $ref: '#/components/schemas/Company'
+        '404':
+          description: Company not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Company
+      summary: Create company
+      description: Create company (only one company allowed)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyInput'
+      responses:
+        '200':
+          description: Company created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      company:
+                        $ref: '#/components/schemas/Company'
+        '400':
+          description: Company already exists or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Company
+      summary: Update company
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyInput'
+      responses:
+        '200':
+          description: Company updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      company:
+                        $ref: '#/components/schemas/Company'
+
+  # ============================================================================
+  # Tenants
+  # ============================================================================
+  /api/tenants:
+    get:
+      tags:
+        - Tenants
+      summary: List all tenants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: integer
+            enum: [0, 1]
+      responses:
+        '200':
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      tenants:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Tenant'
+
+    post:
+      tags:
+        - Tenants
+      summary: Create tenant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantInput'
+      responses:
+        '200':
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      tenant:
+                        $ref: '#/components/schemas/Tenant'
+
+  /api/tenants/{id}:
+    get:
+      tags:
+        - Tenants
+      summary: Get tenant by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      tenant:
+                        $ref: '#/components/schemas/Tenant'
+        '404':
+          description: Tenant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Tenants
+      summary: Update tenant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantInput'
+      responses:
+        '200':
+          description: Tenant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      tenant:
+                        $ref: '#/components/schemas/Tenant'
+
+    delete:
+      tags:
+        - Tenants
+      summary: Deactivate tenant
+      description: Soft delete - sets is_active to 0
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tenant deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+
+  /api/tenants/{id}/percentages:
+    put:
+      tags:
+        - Tenants
+      summary: Update utility percentages
+      description: Set the utility cost sharing percentages for a tenant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UtilityPercentages'
+      responses:
+        '200':
+          description: Percentages updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      percentages:
+                        type: object
+                        additionalProperties:
+                          type: number
+
+  # ============================================================================
+  # Invoices
+  # ============================================================================
+  /api/invoices:
+    get:
+      tags:
+        - Invoices
+      summary: List invoices
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [rent, utility]
+        - name: paid
+          in: query
+          schema:
+            type: integer
+            enum: [0, 1]
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      invoices:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/next-number:
+    get:
+      tags:
+        - Invoices
+      summary: Get next invoice number
+      description: Returns the next available invoice number (ARC prefix)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Next invoice number
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      next_number:
+                        type: string
+                        example: "ARC00001"
+
+  /api/invoices/rent:
+    post:
+      tags:
+        - Invoices
+      summary: Create rent invoice
+      description: Create a rent invoice for a tenant using current BNR exchange rate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentInvoiceInput'
+      responses:
+        '200':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      invoice:
+                        $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/utility:
+    post:
+      tags:
+        - Invoices
+      summary: Create utility invoice
+      description: Create a utility invoice based on calculation results
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenant_id
+                - calculation_id
+              properties:
+                tenant_id:
+                  type: integer
+                calculation_id:
+                  type: integer
+                invoice_date:
+                  type: string
+                  format: date
+                due_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      invoice:
+                        $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/{id}:
+    get:
+      tags:
+        - Invoices
+      summary: Get invoice by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Invoice details with items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      invoice:
+                        $ref: '#/components/schemas/Invoice'
+
+    delete:
+      tags:
+        - Invoices
+      summary: Delete invoice
+      description: Delete unpaid invoice (paid invoices cannot be deleted)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Invoice deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          description: Cannot delete paid invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/invoices/{id}/items:
+    post:
+      tags:
+        - Invoices
+      summary: Add item to invoice
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceItemInput'
+      responses:
+        '200':
+          description: Item added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      item:
+                        $ref: '#/components/schemas/InvoiceItem'
+
+  /api/invoices/{id}/mark-paid:
+    post:
+      tags:
+        - Invoices
+      summary: Mark invoice as paid
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paid_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Invoice marked as paid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      invoice:
+                        $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/{id}/pdf:
+    get:
+      tags:
+        - Invoices
+      summary: Download invoice PDF
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================================
+  # Exchange Rates
+  # ============================================================================
+  /api/exchange-rates/current:
+    get:
+      tags:
+        - Exchange Rates
+      summary: Get current EUR/RON rate
+      description: Returns today's BNR exchange rate (fetches if not cached)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current exchange rate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ExchangeRate'
+
+  /api/exchange-rates/{date}:
+    get:
+      tags:
+        - Exchange Rates
+      summary: Get rate for specific date
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Exchange rate for date
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ExchangeRate'
+
+  # ============================================================================
+  # Dashboard
+  # ============================================================================
+  /api/dashboard:
+    get:
+      tags:
+        - Dashboard
+      summary: Get dashboard metrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/DashboardMetrics'
+
+  # ============================================================================
+  # Health Check
+  # ============================================================================
+  /health:
+    get:
+      tags:
+        - System
+      summary: Health check
+      description: Check if the API and database are operational
+      responses:
+        '200':
+          description: System health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: "ok"
+                      database:
+                        type: string
+                        enum: [connected, disconnected]
+                      timestamp:
+                        type: integer

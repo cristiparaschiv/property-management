@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Factură</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DejaVu Sans', 'Noto Sans', Arial, sans-serif;
+            font-size: 10pt;
+            color: #333;
+            background: #fff;
+            padding: 20mm;
+            line-height: 1.4;
+        }
+
+        /* Header with company branding */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #2c5aa0;
+        }
+
+        .company-logo {
+            max-width: 180px;
+        }
+
+        .company-logo img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .company-name {
+            font-size: 22pt;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 5px;
+        }
+
+        .invoice-title-section {
+            text-align: right;
+        }
+
+        .invoice-title {
+            font-size: 28pt;
+            font-weight: bold;
+            color: #2c5aa0;
+            letter-spacing: 2px;
+        }
+
+        .invoice-number {
+            font-size: 14pt;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .invoice-date {
+            font-size: 10pt;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        /* Two column layout for company and client */
+        .parties {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            gap: 40px;
+        }
+
+        .party-box {
+            flex: 1;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #2c5aa0;
+        }
+
+        .party-box.client {
+            border-left-color: #28a745;
+        }
+
+        .party-label {
+            font-size: 8pt;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .party-name {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .party-details {
+            font-size: 9pt;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .party-details .label {
+            color: #888;
+            display: inline-block;
+            min-width: 70px;
+        }
+
+        /* Invoice details bar */
+        .invoice-meta {
+            display: flex;
+            justify-content: space-between;
+            background: #2c5aa0;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+        }
+
+        .meta-item {
+            text-align: center;
+        }
+
+        .meta-label {
+            font-size: 8pt;
+            text-transform: uppercase;
+            opacity: 0.8;
+            margin-bottom: 3px;
+        }
+
+        .meta-value {
+            font-size: 11pt;
+            font-weight: bold;
+        }
+
+        /* Items table */
+        .items-section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table.items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        table.items th {
+            background: #f1f3f4;
+            padding: 10px 8px;
+            text-align: left;
+            font-size: 8pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #555;
+            border-bottom: 2px solid #2c5aa0;
+        }
+
+        table.items th.right,
+        table.items td.right {
+            text-align: right;
+        }
+
+        table.items th.center,
+        table.items td.center {
+            text-align: center;
+        }
+
+        table.items td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #eee;
+            font-size: 9pt;
+        }
+
+        table.items tr:last-child td {
+            border-bottom: 2px solid #ddd;
+        }
+
+        table.items tr:hover {
+            background: #fafafa;
+        }
+
+        .item-description {
+            font-weight: 500;
+        }
+
+        .item-details {
+            font-size: 8pt;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        /* Totals section */
+        .totals-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+        }
+
+        .totals-box {
+            width: 280px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .totals-row.subtotal {
+            color: #666;
+        }
+
+        .totals-row.vat {
+            color: #666;
+        }
+
+        .totals-row.grand-total {
+            background: #2c5aa0;
+            color: white;
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 12pt;
+            font-weight: bold;
+        }
+
+        .totals-label {
+            font-weight: 500;
+        }
+
+        .totals-value {
+            font-weight: bold;
+        }
+
+        /* Exchange rate info */
+        .exchange-info {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 10px 15px;
+            margin-bottom: 25px;
+            font-size: 9pt;
+        }
+
+        .exchange-info .label {
+            font-weight: bold;
+            color: #856404;
+        }
+
+        /* Footer sections */
+        .footer-sections {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+
+        .footer-section {
+            flex: 1;
+        }
+
+        .footer-section-title {
+            font-size: 9pt;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .footer-section-content {
+            font-size: 9pt;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .bank-details {
+            background: #e8f4f8;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .bank-row {
+            margin-bottom: 4px;
+        }
+
+        .bank-label {
+            color: #666;
+            display: inline-block;
+            min-width: 50px;
+        }
+
+        .bank-value {
+            font-weight: 500;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Notes */
+        .notes-section {
+            background: #f8f9fa;
+            border-left: 4px solid #ffc107;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .notes-title {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 5px;
+            font-size: 9pt;
+        }
+
+        .notes-content {
+            font-size: 9pt;
+            color: #555;
+            font-style: italic;
+        }
+
+        /* Legal notice */
+        .legal-notice {
+            text-align: center;
+            font-size: 8pt;
+            color: #888;
+            font-style: italic;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            margin-top: 20px;
+        }
+
+        /* Signatures */
+        .signatures {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            padding-top: 20px;
+        }
+
+        .signature-box {
+            width: 200px;
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #333;
+            margin-top: 50px;
+            padding-top: 5px;
+        }
+
+        .signature-label {
+            font-size: 8pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        /* Status badge */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 8pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-badge.paid {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.unpaid {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-badge.overdue {
+            background: #721c24;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="company-section">
+            <div class="company-name">ACME Property SRL</div>
+            <!-- Optional: <img src="logo.png" class="company-logo" alt="Logo"> -->
+        </div>
+        <div class="invoice-title-section">
+            <div class="invoice-title">FACTURĂ</div>
+            <div class="invoice-number">ARC 451</div>
+            <div class="invoice-date">Data emiterii: 10.12.2025</div>
+        </div>
+    </div>
+
+    <!-- Invoice Meta Bar -->
+    <div class="invoice-meta">
+        <div class="meta-item">
+            <div class="meta-label">Serie/Număr</div>
+            <div class="meta-value">ARC 451</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Data emiterii</div>
+            <div class="meta-value">10.12.2025</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Scadență</div>
+            <div class="meta-value">25.12.2025</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Status</div>
+            <div class="meta-value"><span class="status-badge unpaid">Neplătită</span></div>
+        </div>
+    </div>
+
+    <!-- Parties (Company & Client) -->
+    <div class="parties">
+        <div class="party-box supplier">
+            <div class="party-label">Furnizor</div>
+            <div class="party-name">ACME Property SRL</div>
+            <div class="party-details">
+                <div><span class="label">Reg. Com.:</span> J40/1234/2020</div>
+                <div><span class="label">C.I.F.:</span> RO12345678</div>
+                <div><span class="label">Adresă:</span> Str. Exemplu nr. 10, București</div>
+                <div><span class="label">Județ:</span> București, Sector 1</div>
+                <div><span class="label">Telefon:</span> 0721 123 456</div>
+            </div>
+        </div>
+        <div class="party-box client">
+            <div class="party-label">Client</div>
+            <div class="party-name">Ion Popescu</div>
+            <div class="party-details">
+                <div><span class="label">C.N.P.:</span> 1850612123456</div>
+                <div><span class="label">Adresă:</span> Str. Florilor nr. 5, Ap. 12</div>
+                <div><span class="label">Oraș:</span> București, Sector 3</div>
+                <div><span class="label">Telefon:</span> 0722 987 654</div>
+                <div><span class="label">Email:</span> ion.popescu@email.com</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exchange Rate Info (for rent invoices) -->
+    <div class="exchange-info">
+        <span class="label">Curs valutar BNR:</span> 1 EUR = 4,9752 RON
+        <span style="color: #666;">(data curs: 09.12.2025)</span>
+    </div>
+
+    <!-- Items Table -->
+    <div class="items-section">
+        <div class="section-title">Detalii facturare</div>
+        <table class="items">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">Nr.</th>
+                    <th style="width: 45%;">Descriere</th>
+                    <th class="center" style="width: 10%;">Cant.</th>
+                    <th class="right" style="width: 15%;">Preț unitar</th>
+                    <th class="center" style="width: 10%;">TVA</th>
+                    <th class="right" style="width: 15%;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="center">1</td>
+                    <td>
+                        <div class="item-description">Chirie Decembrie 2025</div>
+                        <div class="item-details">Apartament 2 camere, Str. Florilor nr. 5</div>
+                    </td>
+                    <td class="center">1</td>
+                    <td class="right">500,00 EUR</td>
+                    <td class="center">0%</td>
+                    <td class="right">2.487,60 RON</td>
+                </tr>
+                <tr>
+                    <td class="center">2</td>
+                    <td>
+                        <div class="item-description">Utilități estimative</div>
+                        <div class="item-details">Avans întreținere - regularizare la facturare</div>
+                    </td>
+                    <td class="center">1</td>
+                    <td class="right">150,00 RON</td>
+                    <td class="center">0%</td>
+                    <td class="right">150,00 RON</td>
+                </tr>
+                <tr>
+                    <td class="center">3</td>
+                    <td>
+                        <div class="item-description">Loc parcare subteran</div>
+                        <div class="item-details">Loc nr. 45, nivel -1</div>
+                    </td>
+                    <td class="center">1</td>
+                    <td class="right">50,00 EUR</td>
+                    <td class="center">0%</td>
+                    <td class="right">248,76 RON</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Totals -->
+    <div class="totals-section">
+        <div class="totals-box">
+            <div class="totals-row subtotal">
+                <span class="totals-label">Subtotal:</span>
+                <span class="totals-value">2.886,36 RON</span>
+            </div>
+            <div class="totals-row vat">
+                <span class="totals-label">TVA (0%):</span>
+                <span class="totals-value">0,00 RON</span>
+            </div>
+            <div class="totals-row grand-total">
+                <span class="totals-label">TOTAL DE PLATĂ:</span>
+                <span class="totals-value">2.886,36 RON</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer sections -->
+    <div class="footer-sections">
+        <div class="footer-section">
+            <div class="footer-section-title">Date bancare</div>
+            <div class="bank-details">
+                <div class="bank-row">
+                    <span class="bank-label">Bancă:</span>
+                    <span>Banca Transilvania</span>
+                </div>
+                <div class="bank-row">
+                    <span class="bank-label">IBAN:</span>
+                    <span class="bank-value">RO49 AAAA 1B31 0075 9384 0000</span>
+                </div>
+                <div class="bank-row">
+                    <span class="bank-label">SWIFT:</span>
+                    <span class="bank-value">BTRLRO22</span>
+                </div>
+            </div>
+        </div>
+        <div class="footer-section">
+            <div class="footer-section-title">Delegat</div>
+            <div class="footer-section-content">
+                <div>Nume: Maria Ionescu</div>
+                <div>C.I.: Seria RD nr. 123456</div>
+                <div>Eliberat de: SPCEP S1</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes (conditional) -->
+    <div class="notes-section">
+        <div class="notes-title">Observații:</div>
+        <div class="notes-content">
+            Plata se poate efectua prin transfer bancar sau numerar.
+            Vă rugăm să menționați numărul facturii la efectuarea plății.
+        </div>
+    </div>
+
+    <!-- Legal Notice -->
+    <div class="legal-notice">
+        Factura circulă fără semnătură și ștampilă conform art. 319 alin. (29) din Legea nr. 227/2015 privind Codul Fiscal.
+    </div>
+
+    <!-- Optional: Signatures section for printed invoices
+    <div class="signatures">
+        <div class="signature-box">
+            <div class="signature-line">
+                <div class="signature-label">Furnizor</div>
+            </div>
+        </div>
+        <div class="signature-box">
+            <div class="signature-line">
+                <div class="signature-label">Client</div>
+            </div>
+        </div>
+    </div>
+    -->
+</body>
+</html>

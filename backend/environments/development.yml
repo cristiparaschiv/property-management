@@ -1,0 +1,60 @@
+# Development Environment Configuration
+
+# Development mode settings
+startup_info: 1
+show_errors: 1
+traces: 1
+warnings: 1
+
+# Logger configuration for development
+logger: "console"
+log: "debug"
+
+# Database connection for development
+plugins:
+  DBIC:
+    default:
+      dsn: "dbi:MariaDB:database=property_management;host=127.0.0.1;port=3306"
+      schema_class: PropertyManager::Schema
+      user: "propman"
+      password: "secure_dev_password"
+      options:
+        RaiseError: 1
+        PrintError: 1
+        AutoCommit: 1
+        mariadb_init_command: "SET NAMES utf8mb4"
+
+# CORS - Allow all origins in development
+cors:
+  enabled: true
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+    - PATCH
+  allowed_headers:
+    - "*"
+  expose_headers:
+    - Content-Disposition
+    - X-Total-Count
+  allow_credentials: true
+  max_age: 3600
+
+# Development-specific settings
+app:
+  # Shorter JWT expiration for testing
+  jwt_expiration: 86400  # 24 hours
+
+  # Lower bcrypt cost for faster development
+  bcrypt_cost: 10
+
+  # Disable rate limiting in development
+  rate_limiting_enabled: false
+
+  # Enable debug features
+  debug_mode: true
+  debug_sql: true

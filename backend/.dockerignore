@@ -1,0 +1,44 @@
+# Dependencies
+local/
+blib/
+
+# Build artifacts
+_build/
+Build
+MYMETA.*
+Makefile
+Makefile.old
+pm_to_blib
+
+# Coverage
+cover_db/
+nytprof.out
+nytprof/
+
+# Logs
+*.log
+logs/
+
+# Environment configs (use env vars in Docker)
+environments/production.yml
+config.local.yml
+
+# Tests (optional - include if you want to run tests in container)
+# t/
+
+# Documentation
+*.md
+!QUICKSTART.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
