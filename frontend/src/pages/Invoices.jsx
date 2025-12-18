@@ -1,17 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Table,
   Button,
-  Space,
   Modal,
   Form,
   Select,
   DatePicker,
   message,
   Tag,
-  Card,
-  Popconfirm,
-  Dropdown,
+  Spin,
   InputNumber,
   Input,
   Divider,
@@ -19,19 +15,24 @@ import {
   Row,
   Col,
   Radio,
-  Typography,
-  Spin,
   Tooltip,
+  Space,
+  Dropdown,
 } from 'antd';
 import {
   PlusOutlined,
   FilePdfOutlined,
   CheckOutlined,
   DeleteOutlined,
-  MoreOutlined,
   MinusCircleOutlined,
-  SearchOutlined,
-  InfoCircleOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  EuroOutlined,
+  CalendarOutlined,
+  UserOutlined,
+  NumberOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoicesService } from '../services/invoicesService';
@@ -39,9 +40,20 @@ import { tenantsService } from '../services/tenantsService';
 import { exchangeRatesService } from '../services/exchangeRatesService';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import EmptyState from '../components/EmptyState';
+import CardRow, {
+  CardRowPrimary,
+  CardRowTitle,
+  CardRowSecondary,
+  CardRowDetail,
+  ActionButton,
+} from '../components/ui/CardRow';
+import {
+  ListSummaryCards,
+  SummaryCard,
+  ListPageHeader,
+  ListToolbar,
+} from '../components/ui/ListSummaryCards';
 import dayjs from 'dayjs';
-
-const { Title } = Typography;
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -58,7 +70,12 @@ const Invoices = () => {
   const [additionalServices, setAdditionalServices] = useState([]);
   const [lineItems, setLineItems] = useState([]);
   const [clientType, setClientType] = useState('tenant');
-  const searchInput = useRef(null);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [paidDateModalOpen, setPaidDateModalOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
+  const [selectedPaidDate, setSelectedPaidDate] = useState(null);
 
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -121,11 +138,11 @@ const Invoices = () => {
 
   const handleDownloadPDF = async (id, invoiceNumber) => {
     try {
-      const blob = await invoicesService.downloadPDF(id);
+      const { blob, filename } = await invoicesService.downloadPDF(id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${invoiceNumber}.pdf`;
+      a.download = filename || `${invoiceNumber}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -172,18 +189,15 @@ const Invoices = () => {
     setExchangeRateError(false);
     setClientType('tenant');
 
-    // Set default month and year to current (for rent invoices)
     const now = dayjs();
     if (type === 'rent') {
       form.setFieldsValue({
-        month: now.month() + 1, // dayjs months are 0-indexed
+        month: now.month() + 1,
         year: now.year(),
       });
-      // Fetch exchange rate for rent invoices
       fetchExchangeRate(now);
     }
 
-    // Set default dates for generic invoices
     if (type === 'generic') {
       form.setFieldsValue({
         invoice_date: now,
@@ -251,7 +265,6 @@ const Invoices = () => {
   const handleOk = () => {
     form.validateFields().then((values) => {
       if (invoiceType === 'generic') {
-        // Validate that at least one line item exists
         if (lineItems.length === 0) {
           message.error('Trebuie să adăugați cel puțin un articol');
           return;
@@ -263,7 +276,6 @@ const Invoices = () => {
           notes: values.notes || null,
         };
 
-        // Add client info based on type
         if (clientType === 'tenant') {
           payload.tenant_id = values.tenant_id;
         } else {
@@ -272,7 +284,6 @@ const Invoices = () => {
           payload.client_tax_id = values.client_tax_id || null;
         }
 
-        // Add items
         payload.items = lineItems.map((item) => ({
           description: item.description,
           quantity: item.quantity,
@@ -288,16 +299,13 @@ const Invoices = () => {
           due_date: values.due_date?.format('YYYY-MM-DD'),
         };
 
-        // Add month and year for description
         payload.period_month = values.month;
         payload.period_year = values.year;
 
-        // Add exchange rate (from auto-fetch or manual input)
         if (values.exchange_rate) {
           payload.exchange_rate = values.exchange_rate;
         }
 
-        // Add additional services if any
         if (additionalServices.length > 0) {
           payload.additional_items = additionalServices.map((s) => ({
             description: s.description,
@@ -312,212 +320,277 @@ const Invoices = () => {
     });
   };
 
-  const getColumnSearchProps = (dataIndex, placeholder) => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-      <div style={{ padding: 8 }}>
-        <Input
-          ref={searchInput}
-          placeholder={placeholder}
-          value={selectedKeys[0]}
-          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-          onPressEnter={() => confirm()}
-          style={{ marginBottom: 8, display: 'block' }}
-        />
-        <Space>
-          <Button
-            type="primary"
-            onClick={() => confirm()}
-            icon={<SearchOutlined />}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Caută
-          </Button>
-          <Button
-            onClick={() => {
-              clearFilters();
-              confirm();
-            }}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Resetează
-          </Button>
-        </Space>
-      </div>
-    ),
-    filterIcon: (filtered) => (
-      <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
-    ),
-    onFilter: (value, record) =>
-      record[dataIndex]
-        ?.toString()
-        .toLowerCase()
-        .includes(value.toLowerCase()),
-    filterDropdownProps: {
-      onOpenChange: (visible) => {
-        if (visible) {
-          setTimeout(() => searchInput.current?.select(), 100);
-        }
-      },
-    },
-  });
+  const handleDelete = (invoice) => {
+    Modal.confirm({
+      title: 'Sigur doriți să ștergeți această factură?',
+      content: `Factura "${invoice.invoice_number}" va fi ștearsă permanent.`,
+      onOk: () => deleteMutation.mutate(invoice.id),
+      okText: 'Da, șterge',
+      cancelText: 'Anulează',
+      okButtonProps: { danger: true },
+    });
+  };
 
-  const columns = [
-    {
-      title: 'Nr. Factură',
-      dataIndex: 'invoice_number',
-      key: 'invoice_number',
-      sorter: (a, b) => a.invoice_number.localeCompare(b.invoice_number),
-      ...getColumnSearchProps('invoice_number', 'Caută după număr'),
-    },
-    {
-      title: 'Chiriaș',
-      dataIndex: 'tenant_name',
-      key: 'tenant_name',
-      ...getColumnSearchProps('tenant_name', 'Caută după chiriaș'),
-    },
-    {
-      title: 'Tip',
-      dataIndex: 'invoice_type',
-      key: 'invoice_type',
-      render: (type) => {
-        const typeConfig = {
-          rent: { color: 'blue', label: 'Chirie' },
-          utility: { color: 'green', label: 'Utilități' },
-          generic: { color: 'purple', label: 'Generică' },
-        };
-        const config = typeConfig[type] || { color: 'default', label: type };
-        return <Tag color={config.color}>{config.label}</Tag>;
-      },
-      filters: [
-        { text: 'Chirie', value: 'rent' },
-        { text: 'Utilități', value: 'utility' },
-        { text: 'Generică', value: 'generic' },
-      ],
-      onFilter: (value, record) => record.invoice_type === value,
-    },
-    {
-      title: 'Data',
-      dataIndex: 'invoice_date',
-      key: 'invoice_date',
-      render: (date) => formatDate(date),
-      sorter: (a, b) => new Date(a.invoice_date) - new Date(b.invoice_date),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      render: (amount) => formatCurrency(amount),
-      sorter: (a, b) => a.total_amount - b.total_amount,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'is_paid',
-      key: 'is_paid',
-      render: (isPaid) => (
-        <Tag color={isPaid ? 'green' : 'red'}>
-          {isPaid ? 'Plătită' : 'Neplătită'}
-        </Tag>
-      ),
-      filters: [
-        { text: 'Plătită', value: true },
-        { text: 'Neplătită', value: false },
-      ],
-      onFilter: (value, record) => record.is_paid === value,
-    },
-    {
-      title: 'Acțiuni',
-      key: 'actions',
-      render: (_, record) => {
-        const items = [
-          {
-            key: 'pdf',
-            icon: <FilePdfOutlined />,
-            label: 'Descarcă PDF',
-            onClick: () => handleDownloadPDF(record.id, record.invoice_number),
-          },
-          ...(!record.is_paid ? [{
-            key: 'mark-paid',
-            icon: <CheckOutlined />,
-            label: 'Plătită',
-            onClick: () => markPaidMutation.mutate({ id: record.id, paidDate: dayjs().format('YYYY-MM-DD') }),
-          }] : []),
-          ...(!record.is_paid ? [{
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: 'Șterge',
-            danger: true,
-            onClick: () => {
-              Modal.confirm({
-                title: 'Sigur doriți să ștergeți această factură?',
-                onOk: () => deleteMutation.mutate(record.id),
-                okText: 'Da',
-                cancelText: 'Nu',
-              });
-            },
-          }] : []),
-        ];
+  const handleMarkPaidWithDate = (invoice) => {
+    setSelectedInvoiceForPayment(invoice);
+    setSelectedPaidDate(dayjs());
+    setPaidDateModalOpen(true);
+  };
 
-        return (
-          <Dropdown
-            menu={{ items }}
-            trigger={['click']}
-          >
-            <Button icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
+  const handleConfirmPaidDate = () => {
+    if (selectedInvoiceForPayment && selectedPaidDate) {
+      markPaidMutation.mutate({
+        id: selectedInvoiceForPayment.id,
+        paidDate: selectedPaidDate.format('YYYY-MM-DD'),
+      });
+      setPaidDateModalOpen(false);
+      setSelectedInvoiceForPayment(null);
+      setSelectedPaidDate(null);
+    }
+  };
+
+  const getPaymentMenuItems = (invoice) => [
+    {
+      key: 'now',
+      label: 'Plătită Azi',
+      icon: <CheckOutlined />,
+      onClick: () => markPaidMutation.mutate({ id: invoice.id, paidDate: dayjs().format('YYYY-MM-DD') }),
+    },
+    {
+      key: 'custom',
+      label: 'Alege Data',
+      icon: <HistoryOutlined />,
+      onClick: () => handleMarkPaidWithDate(invoice),
     },
   ];
 
   const invoices = invoicesData?.data?.invoices || [];
   const tenants = tenantsData?.data?.tenants || [];
 
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    const total = invoices.length;
+    const paid = invoices.filter((i) => i.is_paid).length;
+    const unpaid = invoices.filter((i) => !i.is_paid).length;
+    const totalAmount = invoices.reduce((sum, i) => sum + (parseFloat(i.total_amount) || 0), 0);
+    const unpaidAmount = invoices
+      .filter((i) => !i.is_paid)
+      .reduce((sum, i) => sum + (parseFloat(i.total_amount) || 0), 0);
+    return { total, paid, unpaid, totalAmount, unpaidAmount };
+  }, [invoices]);
+
+  // Filter invoices
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const matchesSearch =
+        !searchText ||
+        invoice.invoice_number?.toLowerCase().includes(searchText.toLowerCase()) ||
+        invoice.tenant_name?.toLowerCase().includes(searchText.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'paid' && invoice.is_paid) ||
+        (statusFilter === 'unpaid' && !invoice.is_paid);
+
+      const matchesType =
+        typeFilter === 'all' || invoice.invoice_type === typeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [invoices, searchText, statusFilter, typeFilter]);
+
+  // Get row status based on invoice state
+  const getRowStatus = (invoice) => {
+    if (invoice.is_paid) return 'success';
+    const dueDate = dayjs(invoice.due_date);
+    const today = dayjs();
+    if (dueDate.isBefore(today)) return 'error';
+    if (dueDate.diff(today, 'day') <= 7) return 'warning';
+    return 'default';
+  };
+
+  // Get invoice type config
+  const getTypeConfig = (type) => {
+    const typeConfig = {
+      rent: { color: 'blue', label: 'Chirie' },
+      utility: { color: 'green', label: 'Utilități' },
+      generic: { color: 'purple', label: 'Generică' },
+    };
+    return typeConfig[type] || { color: 'default', label: type };
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>Facturi Emise</Title>
-        <Space>
-          <Tooltip title="Creați o factură de chirie pentru un chiriaș cu conversie automată EUR→RON">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => showCreateModal('rent')}
-            >
-              Factură Chirie
-            </Button>
-          </Tooltip>
-          <Tooltip title="Creați o factură generică pentru orice serviciu sau produs">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => showCreateModal('generic')}
-              style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
-            >
-              Factură Generică
-            </Button>
-          </Tooltip>
-        </Space>
-      </div>
+      <ListPageHeader
+        title="Facturi Emise"
+        subtitle="Gestionează facturile emise către chiriași"
+        action={
+          <Space>
+            <Tooltip title="Creați o factură de chirie pentru un chiriaș cu conversie automată EUR-RON">
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => showCreateModal('rent')}
+              >
+                Factură Chirie
+              </Button>
+            </Tooltip>
+            <Tooltip title="Creați o factură generică pentru orice serviciu sau produs">
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => showCreateModal('generic')}
+                style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+              >
+                Factură Generică
+              </Button>
+            </Tooltip>
+          </Space>
+        }
+      />
 
-      <Card>
-        {invoices.length === 0 && !isLoading ? (
+      <ListSummaryCards>
+        <SummaryCard
+          icon={<FileTextOutlined />}
+          value={stats.total}
+          label="Total Facturi"
+          variant="default"
+        />
+        <SummaryCard
+          icon={<CheckCircleOutlined />}
+          value={stats.paid}
+          label="Plătite"
+          variant="success"
+        />
+        <SummaryCard
+          icon={<CloseCircleOutlined />}
+          value={stats.unpaid}
+          label="Neplătite"
+          variant="error"
+          subValue={stats.unpaidAmount > 0 ? formatCurrency(stats.unpaidAmount) : null}
+        />
+        <SummaryCard
+          icon={<EuroOutlined />}
+          value={formatCurrency(stats.totalAmount)}
+          label="Valoare Totală"
+          variant="info"
+        />
+      </ListSummaryCards>
+
+      <ListToolbar>
+        <Input.Search
+          placeholder="Caută după număr factură sau chiriaș..."
+          allowClear
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+        <Select
+          value={statusFilter}
+          onChange={setStatusFilter}
+          style={{ width: 150 }}
+          options={[
+            { value: 'all', label: 'Toate' },
+            { value: 'paid', label: 'Plătite' },
+            { value: 'unpaid', label: 'Neplătite' },
+          ]}
+        />
+        <Select
+          value={typeFilter}
+          onChange={setTypeFilter}
+          style={{ width: 150 }}
+          options={[
+            { value: 'all', label: 'Toate Tipurile' },
+            { value: 'rent', label: 'Chirie' },
+            { value: 'utility', label: 'Utilități' },
+            { value: 'generic', label: 'Generică' },
+          ]}
+        />
+      </ListToolbar>
+
+      <div className="pm-card-row-list">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '48px' }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredInvoices.length === 0 ? (
           <EmptyState
-            description="Nu aveți facturi emise. Creați prima factură de chirie sau factură generică."
-            actionText="Creează Prima Factură"
-            onAction={() => showCreateModal('rent')}
+            description={
+              searchText || statusFilter !== 'all' || typeFilter !== 'all'
+                ? 'Nu s-au găsit facturi care să corespundă criteriilor.'
+                : 'Nu aveți facturi emise. Creați prima factură de chirie sau factură generică.'
+            }
+            actionText={!searchText && statusFilter === 'all' && typeFilter === 'all' ? 'Creează Prima Factură' : null}
+            onAction={!searchText && statusFilter === 'all' && typeFilter === 'all' ? () => showCreateModal('rent') : null}
           />
         ) : (
-          <Table
-            columns={columns}
-            dataSource={invoices}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{ pageSize: 10 }}
-          />
+          filteredInvoices.map((invoice) => (
+            <CardRow
+              key={invoice.id}
+              status={getRowStatus(invoice)}
+              actions={
+                <>
+                  <ActionButton
+                    icon={<FilePdfOutlined />}
+                    onClick={() => handleDownloadPDF(invoice.id, invoice.invoice_number)}
+                    variant="view"
+                    title="Descarcă PDF"
+                  />
+                  {!invoice.is_paid && (
+                    <Tooltip title="Marchează plătită" placement="top">
+                      <Dropdown
+                        menu={{ items: getPaymentMenuItems(invoice) }}
+                        trigger={['click']}
+                      >
+                        <button
+                          className="pm-action-btn pm-action-btn--edit"
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Marchează plătită"
+                        >
+                          <CheckOutlined />
+                        </button>
+                      </Dropdown>
+                    </Tooltip>
+                  )}
+                  {!invoice.is_paid && (
+                    <ActionButton
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDelete(invoice)}
+                      variant="delete"
+                      title="Șterge"
+                    />
+                  )}
+                </>
+              }
+            >
+              <CardRowPrimary>
+                <CardRowTitle>{invoice.invoice_number}</CardRowTitle>
+                <Tag color={getTypeConfig(invoice.invoice_type).color}>
+                  {getTypeConfig(invoice.invoice_type).label}
+                </Tag>
+                <Tag color={invoice.is_paid ? 'green' : 'red'}>
+                  {invoice.is_paid ? 'Plătită' : 'Neplătită'}
+                </Tag>
+              </CardRowPrimary>
+              <CardRowSecondary>
+                <CardRowDetail icon={<UserOutlined />}>
+                  {invoice.tenant_name || invoice.client_name || 'Client'}
+                </CardRowDetail>
+                <CardRowDetail icon={<EuroOutlined />}>
+                  {formatCurrency(invoice.total_amount)}
+                </CardRowDetail>
+                <CardRowDetail icon={<CalendarOutlined />}>
+                  {formatDate(invoice.invoice_date)}
+                </CardRowDetail>
+                {invoice.due_date && (
+                  <CardRowDetail icon={<NumberOutlined />}>
+                    Scadent: {formatDate(invoice.due_date)}
+                  </CardRowDetail>
+                )}
+              </CardRowSecondary>
+            </CardRow>
+          ))
         )}
-      </Card>
+      </div>
 
       <Modal
         title={
@@ -585,7 +658,6 @@ const Invoices = () => {
                   value={clientType}
                   onChange={(e) => {
                     setClientType(e.target.value);
-                    // Clear related fields when switching
                     if (e.target.value === 'tenant') {
                       form.setFieldsValue({
                         client_name: undefined,
@@ -637,11 +709,18 @@ const Invoices = () => {
               <Divider orientation="left">Articole Factură</Divider>
 
               {lineItems.map((item, index) => (
-                <Card
+                <div
                   key={item.id}
-                  size="small"
-                  style={{ marginBottom: 12 }}
-                  extra={
+                  style={{
+                    background: 'var(--pm-color-bg-tertiary)',
+                    border: '1px solid var(--pm-color-border-default)',
+                    borderRadius: 'var(--pm-radius-lg)',
+                    padding: '16px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <strong>Articol {index + 1}</strong>
                     <Button
                       type="text"
                       danger
@@ -650,9 +729,7 @@ const Invoices = () => {
                     >
                       Șterge
                     </Button>
-                  }
-                  title={`Articol ${index + 1}`}
-                >
+                  </div>
                   <Row gutter={8}>
                     <Col span={24}>
                       <Form.Item label="Descriere" style={{ marginBottom: 8 }}>
@@ -686,7 +763,7 @@ const Invoices = () => {
                           onChange={(value) =>
                             handleLineItemChange(item.id, 'unit_price', value)
                           }
-                          placeholder="RON (negativ pt. discount)"
+                          placeholder="RON"
                         />
                       </Form.Item>
                     </Col>
@@ -722,7 +799,7 @@ const Invoices = () => {
                       RON
                     </div>
                   </div>
-                </Card>
+                </div>
               ))}
 
               <Button
@@ -880,12 +957,19 @@ const Invoices = () => {
 
               <Divider orientation="left">Servicii Adiționale</Divider>
 
-              {additionalServices.map((service) => (
-                <Card
+              {additionalServices.map((service, index) => (
+                <div
                   key={service.id}
-                  size="small"
-                  style={{ marginBottom: 12 }}
-                  extra={
+                  style={{
+                    background: 'var(--pm-color-bg-tertiary)',
+                    border: '1px solid var(--pm-color-border-default)',
+                    borderRadius: 'var(--pm-radius-lg)',
+                    padding: '16px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <strong>Serviciu {index + 1}</strong>
                     <Button
                       type="text"
                       danger
@@ -894,8 +978,7 @@ const Invoices = () => {
                     >
                       Șterge
                     </Button>
-                  }
-                >
+                  </div>
                   <Row gutter={8}>
                     <Col span={24}>
                       <Form.Item label="Descriere" style={{ marginBottom: 8 }}>
@@ -929,7 +1012,7 @@ const Invoices = () => {
                           onChange={(value) =>
                             handleServiceChange(service.id, 'unit_price', value)
                           }
-                          placeholder="RON (negativ pt. discount)"
+                          placeholder="RON"
                         />
                       </Form.Item>
                     </Col>
@@ -953,7 +1036,7 @@ const Invoices = () => {
                       {(service.quantity * service.unit_price).toFixed(2)} RON
                     </strong>
                   </div>
-                </Card>
+                </div>
               ))}
 
               <Button
@@ -967,6 +1050,38 @@ const Invoices = () => {
             </>
           )}
         </Form>
+      </Modal>
+
+      <Modal
+        title="Selectați Data Plății"
+        open={paidDateModalOpen}
+        onOk={handleConfirmPaidDate}
+        onCancel={() => {
+          setPaidDateModalOpen(false);
+          setSelectedInvoiceForPayment(null);
+          setSelectedPaidDate(null);
+        }}
+        okText="Confirmă"
+        cancelText="Anulează"
+        confirmLoading={markPaidMutation.isPending}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>
+            Factura: <strong>{selectedInvoiceForPayment?.invoice_number}</strong>
+          </p>
+          <p>
+            Client: <strong>{selectedInvoiceForPayment?.tenant_name || selectedInvoiceForPayment?.client_name || 'Client'}</strong>
+          </p>
+        </div>
+        <Form.Item label="Data Plății" style={{ marginBottom: 0 }}>
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD.MM.YYYY"
+            value={selectedPaidDate}
+            onChange={(date) => setSelectedPaidDate(date)}
+            allowClear={false}
+          />
+        </Form.Item>
       </Modal>
     </div>
   );

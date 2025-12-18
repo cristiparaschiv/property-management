@@ -1,27 +1,44 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Table,
   Button,
-  Space,
   Modal,
   Form,
   Input,
   Select,
   Switch,
   message,
-  Popconfirm,
   Tag,
-  Card,
-  Dropdown,
-  Typography,
+  Spin,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ShopOutlined,
+  CheckCircleOutlined,
+  ThunderboltOutlined,
+  AppstoreOutlined,
+  PhoneOutlined,
+  MailOutlined,
+  GlobalOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { utilityProvidersService } from '../services/utilityProvidersService';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
 import EmptyState from '../components/EmptyState';
-
-const { Title } = Typography;
+import CardRow, {
+  CardRowPrimary,
+  CardRowTitle,
+  CardRowSecondary,
+  CardRowDetail,
+  ActionButton,
+} from '../components/ui/CardRow';
+import {
+  ListSummaryCards,
+  SummaryCard,
+  ListPageHeader,
+  ListToolbar,
+} from '../components/ui/ListSummaryCards';
 
 const { Option } = Select;
 
@@ -30,7 +47,8 @@ const UtilityProviders = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState(null);
-  const searchInput = useRef(null);
+  const [searchText, setSearchText] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const { data, isLoading } = useQuery({
     queryKey: ['utility-providers'],
@@ -97,175 +115,187 @@ const UtilityProviders = () => {
     });
   };
 
-  const getColumnSearchProps = (dataIndex, placeholder) => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-      <div style={{ padding: 8 }}>
-        <Input
-          ref={searchInput}
-          placeholder={placeholder}
-          value={selectedKeys[0]}
-          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-          onPressEnter={() => confirm()}
-          style={{ marginBottom: 8, display: 'block' }}
-        />
-        <Space>
-          <Button
-            type="primary"
-            onClick={() => confirm()}
-            icon={<SearchOutlined />}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Caută
-          </Button>
-          <Button
-            onClick={() => {
-              clearFilters();
-              confirm();
-            }}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Resetează
-          </Button>
-        </Space>
-      </div>
-    ),
-    filterIcon: (filtered) => (
-      <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
-    ),
-    onFilter: (value, record) =>
-      record[dataIndex]
-        ?.toString()
-        .toLowerCase()
-        .includes(value.toLowerCase()),
-    filterDropdownProps: {
-      onOpenChange: (visible) => {
-        if (visible) {
-          setTimeout(() => searchInput.current?.select(), 100);
-        }
-      },
-    },
-  });
-
-  const columns = [
-    {
-      title: 'Nume',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      ...getColumnSearchProps('name', 'Caută după nume'),
-    },
-    {
-      title: 'Tip',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type) => <Tag color="blue">{getUtilityTypeLabel(type)}</Tag>,
-      filters: UTILITY_TYPE_OPTIONS.map(option => ({
-        text: option.label,
-        value: option.value,
-      })),
-      onFilter: (value, record) => record.type === value,
-    },
-    {
-      title: 'Telefon',
-      dataIndex: 'phone',
-      key: 'phone',
-      ...getColumnSearchProps('phone', 'Caută după telefon'),
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
-      ...getColumnSearchProps('email', 'Caută după email'),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'Activ' : 'Inactiv'}
-        </Tag>
-      ),
-      filters: [
-        { text: 'Activ', value: true },
-        { text: 'Inactiv', value: false },
-      ],
-      onFilter: (value, record) => record.is_active === value,
-    },
-    {
-      title: 'Acțiuni',
-      key: 'actions',
-      render: (_, record) => {
-        const items = [
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Editează',
-            onClick: () => showEditModal(record),
-          },
-          {
-            key: 'deactivate',
-            icon: <DeleteOutlined />,
-            label: 'Dezactivează',
-            danger: true,
-            onClick: () => {
-              Modal.confirm({
-                title: 'Sigur doriți să dezactivați acest furnizor?',
-                onOk: () => deleteMutation.mutate(record.id),
-                okText: 'Da',
-                cancelText: 'Nu',
-              });
-            },
-          },
-        ];
-
-        return (
-          <Dropdown
-            menu={{ items }}
-            trigger={['click']}
-          >
-            <Button icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
-    },
-  ];
+  const handleDelete = (provider) => {
+    Modal.confirm({
+      title: 'Sigur doriți să dezactivați acest furnizor?',
+      content: `Furnizorul "${provider.name}" va fi marcat ca inactiv.`,
+      onOk: () => deleteMutation.mutate(provider.id),
+      okText: 'Da, dezactivează',
+      cancelText: 'Anulează',
+      okButtonProps: { danger: true },
+    });
+  };
 
   const providers = data?.data || [];
 
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    const total = providers.length;
+    const active = providers.filter((p) => p.is_active).length;
+    const electricity = providers.filter((p) => p.type === 'electricity').length;
+    const other = providers.filter((p) => p.type !== 'electricity').length;
+    return { total, active, electricity, other };
+  }, [providers]);
+
+  // Filter providers
+  const filteredProviders = useMemo(() => {
+    return providers.filter((provider) => {
+      const matchesSearch =
+        !searchText ||
+        provider.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        provider.email?.toLowerCase().includes(searchText.toLowerCase()) ||
+        provider.phone?.includes(searchText);
+
+      const matchesType =
+        typeFilter === 'all' || provider.type === typeFilter;
+
+      return matchesSearch && matchesType;
+    });
+  }, [providers, searchText, typeFilter]);
+
+  // Get row status based on provider state
+  const getRowStatus = (provider) => {
+    if (!provider.is_active) return 'error';
+    return 'success';
+  };
+
+  // Get utility type tag color
+  const getTypeColor = (type) => {
+    const colors = {
+      electricity: 'gold',
+      gas: 'orange',
+      water: 'blue',
+      internet: 'purple',
+      salubrity: 'green',
+      other: 'default',
+    };
+    return colors[type] || 'default';
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>Furnizori Utilități</Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={showCreateModal}
-        >
-          Adaugă Furnizor
-        </Button>
-      </div>
+      <ListPageHeader
+        title="Furnizori Utilități"
+        subtitle="Gestionează furnizorii de utilități pentru proprietăți"
+        action={
+          <Button type="primary" icon={<PlusOutlined />} onClick={showCreateModal}>
+            Adaugă Furnizor
+          </Button>
+        }
+      />
 
-      <Card>
-        {providers.length === 0 && !isLoading ? (
+      <ListSummaryCards>
+        <SummaryCard
+          icon={<ShopOutlined />}
+          value={stats.total}
+          label="Total Furnizori"
+          variant="default"
+        />
+        <SummaryCard
+          icon={<CheckCircleOutlined />}
+          value={stats.active}
+          label="Activi"
+          variant="success"
+        />
+        <SummaryCard
+          icon={<ThunderboltOutlined />}
+          value={stats.electricity}
+          label="Electricitate"
+          variant="warning"
+        />
+        <SummaryCard
+          icon={<AppstoreOutlined />}
+          value={stats.other}
+          label="Alte Tipuri"
+          variant="info"
+        />
+      </ListSummaryCards>
+
+      <ListToolbar>
+        <Input.Search
+          placeholder="Caută după nume, email sau telefon..."
+          allowClear
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+        <Select
+          value={typeFilter}
+          onChange={setTypeFilter}
+          style={{ width: 180 }}
+          options={[
+            { value: 'all', label: 'Toate Tipurile' },
+            ...UTILITY_TYPE_OPTIONS.map((opt) => ({
+              value: opt.value,
+              label: opt.label,
+            })),
+          ]}
+        />
+      </ListToolbar>
+
+      <div className="pm-card-row-list">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '48px' }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredProviders.length === 0 ? (
           <EmptyState
-            description="Nu aveți furnizori de utilități înregistrați. Adăugați primul furnizor pentru a începe."
-            actionText="Adaugă Primul Furnizor"
-            onAction={showCreateModal}
+            description={
+              searchText || typeFilter !== 'all'
+                ? 'Nu s-au găsit furnizori care să corespundă criteriilor.'
+                : 'Nu aveți furnizori de utilități înregistrați. Adăugați primul furnizor pentru a începe.'
+            }
+            actionText={!searchText && typeFilter === 'all' ? 'Adaugă Primul Furnizor' : null}
+            onAction={!searchText && typeFilter === 'all' ? showCreateModal : null}
           />
         ) : (
-          <Table
-            columns={columns}
-            dataSource={providers}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{ pageSize: 10 }}
-          />
+          filteredProviders.map((provider) => (
+            <CardRow
+              key={provider.id}
+              status={getRowStatus(provider)}
+              onClick={() => showEditModal(provider)}
+              actions={
+                <>
+                  <ActionButton
+                    icon={<EditOutlined />}
+                    onClick={() => showEditModal(provider)}
+                    variant="edit"
+                    title="Editează"
+                  />
+                  <ActionButton
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDelete(provider)}
+                    variant="delete"
+                    title="Dezactivează"
+                  />
+                </>
+              }
+            >
+              <CardRowPrimary>
+                <CardRowTitle>{provider.name}</CardRowTitle>
+                <Tag color={getTypeColor(provider.type)}>
+                  {getUtilityTypeLabel(provider.type)}
+                </Tag>
+                <Tag color={provider.is_active ? 'green' : 'default'}>
+                  {provider.is_active ? 'Activ' : 'Inactiv'}
+                </Tag>
+              </CardRowPrimary>
+              <CardRowSecondary>
+                {provider.phone && (
+                  <CardRowDetail icon={<PhoneOutlined />}>{provider.phone}</CardRowDetail>
+                )}
+                {provider.email && (
+                  <CardRowDetail icon={<MailOutlined />}>{provider.email}</CardRowDetail>
+                )}
+                {provider.website && (
+                  <CardRowDetail icon={<GlobalOutlined />}>{provider.website}</CardRowDetail>
+                )}
+              </CardRowSecondary>
+            </CardRow>
+          ))
         )}
-      </Card>
+      </div>
 
+      {/* Add/Edit Modal */}
       <Modal
         title={editingProvider ? 'Editare Furnizor' : 'Adăugare Furnizor'}
         open={isModalOpen}
@@ -280,11 +310,7 @@ const UtilityProviders = () => {
         cancelText="Anulează"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{ is_active: true }}
-        >
+        <Form form={form} layout="vertical" initialValues={{ is_active: true }}>
           <Form.Item
             label="Nume"
             name="name"
@@ -307,10 +333,7 @@ const UtilityProviders = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item
-            label="Telefon"
-            name="phone"
-          >
+          <Form.Item label="Telefon" name="phone">
             <Input />
           </Form.Item>
 
@@ -322,25 +345,15 @@ const UtilityProviders = () => {
             <Input />
           </Form.Item>
 
-          <Form.Item
-            label="Adresă"
-            name="address"
-          >
+          <Form.Item label="Adresă" name="address">
             <Input />
           </Form.Item>
 
-          <Form.Item
-            label="Website"
-            name="website"
-          >
+          <Form.Item label="Website" name="website">
             <Input />
           </Form.Item>
 
-          <Form.Item
-            label="Activ"
-            name="is_active"
-            valuePropName="checked"
-          >
+          <Form.Item label="Activ" name="is_active" valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>

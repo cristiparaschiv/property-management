@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf);
 use Try::Tiny;
 
 prefix '/api/meter-readings';
@@ -64,9 +64,90 @@ get '/:id' => sub {
     return { success => 1, data => { reading => { $reading->get_columns } } };
 };
 
+post '/batch' => sub {
+    my $auth_error = require_auth();
+    return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $data = request->data;
+    my $readings = $data->{readings};
+
+    unless ($readings && ref($readings) eq 'ARRAY' && @$readings) {
+        status 400;
+        return { success => 0, error => 'readings array is required' };
+    }
+
+    my @created = ();
+    my @errors = ();
+
+    try {
+        schema->txn_do(sub {
+            foreach my $reading_data (@$readings) {
+                # Validate required fields
+                unless ($reading_data->{meter_id} && $reading_data->{reading_date} &&
+                        defined $reading_data->{reading_value} &&
+                        $reading_data->{period_month} && $reading_data->{period_year}) {
+                    push @errors, { meter_id => $reading_data->{meter_id}, error => 'Missing required fields' };
+                    next;
+                }
+
+                # Validate reading value is not negative
+                if ($reading_data->{reading_value} < 0) {
+                    push @errors, { meter_id => $reading_data->{meter_id}, error => 'Reading value must be non-negative' };
+                    next;
+                }
+
+                # Calculate consumption from previous reading
+                my $prev_reading = _find_previous_reading(
+                    schema => schema,
+                    meter_id => $reading_data->{meter_id},
+                    year => $reading_data->{period_year},
+                    month => $reading_data->{period_month}
+                );
+
+                if ($prev_reading) {
+                    my $prev_value = $prev_reading->reading_value;
+                    $reading_data->{previous_reading_value} = $prev_value;
+                    $reading_data->{consumption} = $reading_data->{reading_value} - $prev_value;
+                } else {
+                    $reading_data->{previous_reading_value} = undef;
+                    $reading_data->{consumption} = 0;
+                }
+
+                # Remove id if passed
+                delete $reading_data->{id};
+
+                my $reading = schema->resultset('MeterReading')->update_or_create(
+                    $reading_data,
+                    { key => 'unique_meter_period' }
+                );
+                push @created, { $reading->get_columns };
+            }
+        });
+    } catch {
+        my $error = $_;
+        error("Failed to create batch meter readings: $error");
+        status 500;
+        return { success => 0, error => 'Failed to create readings' };
+    };
+
+    return {
+        success => 1,
+        data => {
+            created => \@created,
+            errors => \@errors,
+        }
+    };
+};
+
 post '' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $data = request->data;
 
@@ -152,6 +233,9 @@ put '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $reading = schema->resultset('MeterReading')->find(route_parameters->get('id'));
     unless ($reading) {
         status 404;
@@ -232,6 +316,9 @@ put '/:id' => sub {
 del '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $reading = schema->resultset('MeterReading')->find(route_parameters->get('id'));
     unless ($reading) {

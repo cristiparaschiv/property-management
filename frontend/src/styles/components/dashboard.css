@@ -1,0 +1,310 @@
+/**
+ * Dashboard Styles - Property Management System
+ * Dashboard-specific layouts and chart styles
+ */
+
+/* Dashboard Container */
+.pm-dashboard {
+  animation: pm-fade-in-up 0.4s ease-out;
+}
+
+@keyframes pm-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dashboard Header */
+.pm-dashboard__header {
+  margin-bottom: var(--pm-space-xl);
+}
+
+.pm-dashboard__title {
+  font-size: var(--pm-font-size-2xl);
+  font-weight: var(--pm-font-weight-bold);
+  color: var(--pm-color-text-primary);
+  margin: 0 0 var(--pm-space-xs) 0;
+}
+
+.pm-dashboard__subtitle {
+  font-size: var(--pm-font-size-sm);
+  color: var(--pm-color-text-secondary);
+  margin: 0;
+}
+
+/* Stats Section */
+.pm-dashboard__stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--pm-space-lg);
+  margin-bottom: var(--pm-space-xl);
+}
+
+@media (max-width: 1400px) {
+  .pm-dashboard__stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 992px) {
+  .pm-dashboard__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 576px) {
+  .pm-dashboard__stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Staggered animation for stats */
+.pm-dashboard__stats > * {
+  animation: pm-fade-in-up 0.4s ease-out backwards;
+}
+
+.pm-dashboard__stats > *:nth-child(1) { animation-delay: 0ms; }
+.pm-dashboard__stats > *:nth-child(2) { animation-delay: 50ms; }
+.pm-dashboard__stats > *:nth-child(3) { animation-delay: 100ms; }
+.pm-dashboard__stats > *:nth-child(4) { animation-delay: 150ms; }
+.pm-dashboard__stats > *:nth-child(5) { animation-delay: 200ms; }
+
+/* Charts Section */
+.pm-dashboard__charts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--pm-space-lg);
+  margin-bottom: var(--pm-space-xl);
+}
+
+@media (max-width: 1200px) {
+  .pm-dashboard__charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pm-dashboard__chart--full {
+  grid-column: 1 / -1;
+}
+
+/* Tables Section */
+.pm-dashboard__tables {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--pm-space-lg);
+  margin-bottom: var(--pm-space-xl);
+}
+
+@media (max-width: 1200px) {
+  .pm-dashboard__tables {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Section Header */
+.pm-dashboard__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--pm-space-md);
+}
+
+.pm-dashboard__section-title {
+  font-size: var(--pm-font-size-lg);
+  font-weight: var(--pm-font-weight-semibold);
+  color: var(--pm-color-text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--pm-space-sm);
+}
+
+.pm-dashboard__section-title .anticon {
+  color: var(--pm-color-primary);
+}
+
+/* Quick Actions */
+.pm-dashboard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pm-space-sm);
+  margin-bottom: var(--pm-space-xl);
+}
+
+.pm-dashboard__actions .ant-btn {
+  border-radius: var(--pm-radius-lg);
+  height: 40px;
+  padding: 0 var(--pm-space-md);
+  font-weight: var(--pm-font-weight-medium);
+  transition: all var(--pm-transition-fast);
+}
+
+.pm-dashboard__actions .ant-btn:hover {
+  transform: translateY(-2px);
+}
+
+.pm-dashboard__actions .ant-btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Chart Gradients for Recharts */
+.pm-chart-gradient {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Custom Tooltip */
+.pm-chart-tooltip {
+  background: var(--pm-color-bg-elevated) !important;
+  border: 1px solid var(--pm-color-border-default) !important;
+  border-radius: var(--pm-radius-md) !important;
+  box-shadow: var(--pm-shadow-lg) !important;
+  padding: var(--pm-space-sm) var(--pm-space-md) !important;
+}
+
+.pm-chart-tooltip__label {
+  font-weight: var(--pm-font-weight-semibold);
+  color: var(--pm-color-text-primary);
+  margin-bottom: var(--pm-space-xs);
+}
+
+.pm-chart-tooltip__item {
+  display: flex;
+  align-items: center;
+  gap: var(--pm-space-xs);
+  font-size: var(--pm-font-size-sm);
+  color: var(--pm-color-text-secondary);
+}
+
+.pm-chart-tooltip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--pm-radius-full);
+}
+
+/* Recent Activity Table */
+.pm-dashboard__recent-table .ant-table {
+  border-radius: var(--pm-radius-lg);
+}
+
+.pm-dashboard__recent-table .ant-table-thead > tr > th {
+  background: var(--pm-color-bg-tertiary);
+  font-weight: var(--pm-font-weight-semibold);
+  font-size: var(--pm-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--pm-color-text-secondary);
+}
+
+/* Tab Cards */
+.pm-dashboard__tabbed-card {
+  background: var(--pm-color-bg-secondary);
+  border: 1px solid var(--pm-color-border-default);
+  border-radius: var(--pm-radius-xl);
+  overflow: hidden;
+}
+
+.pm-dashboard__tabbed-card .ant-tabs-nav {
+  margin: 0;
+  padding: 0 var(--pm-space-md);
+  background: var(--pm-color-bg-tertiary);
+}
+
+.pm-dashboard__tabbed-card .ant-tabs-tab {
+  padding: var(--pm-space-md) var(--pm-space-sm);
+  font-weight: var(--pm-font-weight-medium);
+}
+
+.pm-dashboard__tabbed-card .ant-tabs-content-holder {
+  padding: var(--pm-space-lg);
+}
+
+/* Welcome Message */
+.pm-dashboard__welcome {
+  background: linear-gradient(135deg, var(--pm-color-primary) 0%, var(--pm-color-primary-700) 100%);
+  color: white;
+  padding: var(--pm-space-xl);
+  border-radius: var(--pm-radius-xl);
+  margin-bottom: var(--pm-space-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.pm-dashboard__welcome::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+}
+
+.pm-dashboard__welcome-title {
+  font-size: var(--pm-font-size-xl);
+  font-weight: var(--pm-font-weight-bold);
+  margin: 0 0 var(--pm-space-xs) 0;
+}
+
+.pm-dashboard__welcome-text {
+  font-size: var(--pm-font-size-sm);
+  opacity: 0.9;
+  margin: 0;
+}
+
+/* Activity Badge */
+.pm-activity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--pm-radius-full);
+  font-size: var(--pm-font-size-xs);
+  font-weight: var(--pm-font-weight-medium);
+}
+
+.pm-activity-badge--success {
+  background: var(--pm-color-success-light);
+  color: var(--pm-color-success-dark);
+}
+
+.pm-activity-badge--warning {
+  background: var(--pm-color-warning-light);
+  color: var(--pm-color-warning-dark);
+}
+
+.pm-activity-badge--error {
+  background: var(--pm-color-error-light);
+  color: var(--pm-color-error-dark);
+}
+
+.pm-activity-badge--info {
+  background: var(--pm-color-info-light);
+  color: var(--pm-color-info-dark);
+}
+
+/* Responsive Chart Heights */
+@media (max-width: 768px) {
+  .pm-chart-card__body {
+    padding: var(--pm-space-md);
+  }
+}
+
+/* Activity Section */
+.pm-dashboard__activity-section {
+  margin-bottom: var(--pm-space-xl);
+}
+
+.pm-dashboard__activity-section .pm-activity-log-card {
+  max-height: none;
+}
+
+.pm-dashboard__activity-section .pm-activity-log-card__content {
+  max-height: 450px;
+}

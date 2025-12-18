@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Row, Col, Statistic, Spin, Alert, Table, Tag, Button, Typography } from 'antd';
+import { Spin, Alert, Table, Tag, Button, Typography, Progress, Tooltip as AntTooltip } from 'antd';
 import {
   UserOutlined,
   FileTextOutlined,
@@ -7,24 +7,57 @@ import {
   CreditCardOutlined,
   WarningOutlined,
   BankOutlined,
+  PlusOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  CalculatorOutlined,
+  FileSearchOutlined,
+  HistoryOutlined,
+  ExclamationCircleOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Line,
+  Area,
+  AreaChart,
+  LineChart,
+} from 'recharts';
 import { dashboardService } from '../services/dashboardService';
 import { formatCurrency, formatDate, getMonthName } from '../utils/formatters';
 import { getUtilityTypeLabel } from '../constants/utilityTypes';
+import { useTheme } from '../contexts/ThemeContext';
+import StatCard from '../components/ui/StatCard';
+import ChartCard from '../components/ui/ChartCard';
+import CollapsibleSection from '../components/ui/CollapsibleSection';
+import ActivityLogWidget from '../components/ActivityLogWidget';
+import '../styles/components/dashboard.css';
+import '../styles/components/cards.css';
 
 const { Title } = Typography;
 
-// Colors for charts
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
-const PIE_COLORS = {
-  paid: '#52c41a',
-  unpaid: '#ff4d4f',
-};
-
 const Dashboard = () => {
+  const { isDarkMode, chartColors } = useTheme();
+
+  // Chart colors based on theme
+  const COLORS = chartColors?.palette || ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const PIE_COLORS = {
+    paid: '#10b981',
+    unpaid: '#ef4444',
+  };
+
   // Fetch dashboard summary
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery({
     queryKey: ['dashboard-summary'],
@@ -55,9 +88,27 @@ const Dashboard = () => {
     queryFn: () => dashboardService.getCashFlowChart(12),
   });
 
+  // Fetch tenant balances
+  const { data: tenantBalancesData, isLoading: tenantBalancesLoading } = useQuery({
+    queryKey: ['dashboard-tenant-balances'],
+    queryFn: dashboardService.getTenantBalances,
+  });
+
+  // Fetch overdue invoices
+  const { data: overdueInvoicesData, isLoading: overdueLoading } = useQuery({
+    queryKey: ['dashboard-overdue-invoices'],
+    queryFn: dashboardService.getOverdueInvoices,
+  });
+
+  // Fetch utility evolution chart
+  const { data: utilityEvolutionData, isLoading: utilityEvolutionLoading } = useQuery({
+    queryKey: ['dashboard-utility-evolution'],
+    queryFn: () => dashboardService.getUtilityEvolutionChart(12),
+  });
+
   if (summaryLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
+      <div className="pm-card-loading" style={{ minHeight: '400px' }}>
         <Spin size="large" />
       </div>
     );
@@ -77,31 +128,69 @@ const Dashboard = () => {
   const summary = summaryData?.data || {};
 
   // Prepare utility costs data for pie chart
-  const utilityChartData = utilityCostsData?.data?.map((item) => ({
-    name: getUtilityTypeLabel(item.utility_type),
-    value: parseFloat(item.amount),
-  })) || [];
+  const utilityCostsRaw = utilityCostsData?.data;
+  const utilityChartData = Array.isArray(utilityCostsRaw)
+    ? utilityCostsRaw.map((item) => ({
+        name: getUtilityTypeLabel(item.utility_type),
+        value: parseFloat(item.amount),
+      }))
+    : [];
 
   // Prepare expenses trend data for bar chart
-  const expensesChartData = expensesTrendData?.data?.map((item) => ({
-    name: getMonthName(item.month),
-    expenses: parseFloat(item.expenses),
-  })) || [];
+  const expensesTrendRaw = expensesTrendData?.data;
+  const expensesChartData = Array.isArray(expensesTrendRaw)
+    ? expensesTrendRaw.map((item) => ({
+        name: getMonthName(item.month),
+        expenses: parseFloat(item.expenses),
+      }))
+    : [];
 
   // Prepare invoices status data for pie chart
-  const invoicesStatusChartData = invoicesStatusData?.data ? [
-    { name: 'Plătite', value: invoicesStatusData.data.paid.count, amount: parseFloat(invoicesStatusData.data.paid.total) },
-    { name: 'Neplătite', value: invoicesStatusData.data.unpaid.count, amount: parseFloat(invoicesStatusData.data.unpaid.total) },
-  ] : [];
+  const invoicesStatusChartData = invoicesStatusData?.data?.paid && invoicesStatusData?.data?.unpaid
+    ? [
+        { name: 'Plătite', value: invoicesStatusData.data.paid.count, amount: parseFloat(invoicesStatusData.data.paid.total) },
+        { name: 'Neplătite', value: invoicesStatusData.data.unpaid.count, amount: parseFloat(invoicesStatusData.data.unpaid.total) },
+      ]
+    : [];
 
   // Prepare cash flow data for line chart
-  const cashFlowChartData = cashFlowData?.data?.map((item) => ({
-    name: item.month_name || getMonthName(item.month),
-    receivedPayments: parseFloat(item.received_payments || 0),
-    invoicesIssued: parseFloat(item.invoices_issued || 0),
-    paymentsMade: parseFloat(item.payments_made || 0),
-    utilityInvoices: parseFloat(item.utility_invoices || 0),
-  })) || [];
+  const cashFlowRaw = cashFlowData?.data;
+  const cashFlowChartData = Array.isArray(cashFlowRaw)
+    ? cashFlowRaw.map((item) => ({
+        name: item.month_name || getMonthName(item.month),
+        receivedPayments: parseFloat(item.received_payments || 0),
+        invoicesIssued: parseFloat(item.invoices_issued || 0),
+        paymentsMade: parseFloat(item.payments_made || 0),
+        utilityInvoices: parseFloat(item.utility_invoices || 0),
+      }))
+    : [];
+
+  // Prepare tenant balances data
+  const tenantBalancesRaw = tenantBalancesData?.data?.tenants;
+  const tenantBalances = Array.isArray(tenantBalancesRaw) ? tenantBalancesRaw : [];
+  const balancesSummary = tenantBalancesData?.data?.summary || {};
+
+  // Prepare overdue invoices data
+  const overdueInvoicesRaw = overdueInvoicesData?.data?.invoices;
+  const overdueInvoices = Array.isArray(overdueInvoicesRaw) ? overdueInvoicesRaw : [];
+  const overdueSummary = overdueInvoicesData?.data || {};
+  const agingSummary = overdueSummary.aging_summary && typeof overdueSummary.aging_summary === 'object'
+    ? Object.entries(overdueSummary.aging_summary)
+    : [];
+
+  // Prepare utility evolution data
+  const utilityEvolutionRaw = utilityEvolutionData?.data;
+  const utilityEvolutionChartData = Array.isArray(utilityEvolutionRaw)
+    ? utilityEvolutionRaw.map((item) => ({
+        name: item.month,
+        electricity: parseFloat(item.electricity || 0),
+        gas: parseFloat(item.gas || 0),
+        water: parseFloat(item.water || 0),
+        internet: parseFloat(item.internet || 0),
+        salubrity: parseFloat(item.salubrity || 0),
+        total: parseFloat(item.total || 0),
+      }))
+    : [];
 
   // Columns for recent received invoices table
   const recentInvoicesColumns = [
@@ -133,7 +222,7 @@ const Dashboard = () => {
       dataIndex: 'is_paid',
       key: 'is_paid',
       render: (isPaid) => (
-        <Tag color={isPaid ? 'green' : 'red'}>
+        <Tag color={isPaid ? 'success' : 'error'}>
           {isPaid ? 'Plătită' : 'Neplătită'}
         </Tag>
       ),
@@ -167,20 +256,139 @@ const Dashboard = () => {
     },
   ];
 
-  // Custom tooltip for pie charts
-  const CustomTooltip = ({ active, payload }) => {
+  // Columns for tenant balances table
+  const tenantBalanceColumns = [
+    {
+      title: 'Chiriaș',
+      dataIndex: 'tenant_name',
+      key: 'tenant_name',
+      render: (name, record) => (
+        <Link to={`/tenants?id=${record.tenant_id}`}>{name}</Link>
+      ),
+    },
+    {
+      title: 'Total Facturat',
+      dataIndex: 'total_invoiced',
+      key: 'total_invoiced',
+      render: (amount) => formatCurrency(parseFloat(amount)),
+      align: 'right',
+    },
+    {
+      title: 'Total Plătit',
+      dataIndex: 'total_paid',
+      key: 'total_paid',
+      render: (amount) => formatCurrency(parseFloat(amount)),
+      align: 'right',
+    },
+    {
+      title: 'Sold',
+      dataIndex: 'balance',
+      key: 'balance',
+      render: (balance) => {
+        const value = parseFloat(balance);
+        return (
+          <span style={{ color: value > 0 ? 'var(--pm-color-error)' : 'var(--pm-color-success)', fontWeight: 600 }}>
+            {formatCurrency(value)}
+          </span>
+        );
+      },
+      align: 'right',
+    },
+    {
+      title: 'Facturi Neplătite',
+      dataIndex: 'unpaid_count',
+      key: 'unpaid_count',
+      render: (count) => count > 0 ? (
+        <Tag color="error">{count}</Tag>
+      ) : (
+        <Tag color="success">0</Tag>
+      ),
+      align: 'center',
+    },
+  ];
+
+  // Columns for overdue invoices table
+  const overdueColumns = [
+    {
+      title: 'Chiriaș',
+      dataIndex: 'tenant_name',
+      key: 'tenant_name',
+      render: (name, record) => (
+        <Link to={`/invoices?id=${record.id}`}>{name}</Link>
+      ),
+    },
+    {
+      title: 'Factură',
+      dataIndex: 'invoice_number',
+      key: 'invoice_number',
+    },
+    {
+      title: 'Sumă',
+      dataIndex: 'total_ron',
+      key: 'total_ron',
+      render: (amount) => formatCurrency(parseFloat(amount)),
+      align: 'right',
+    },
+    {
+      title: 'Scadență',
+      dataIndex: 'due_date',
+      key: 'due_date',
+      render: (date) => formatDate(date),
+    },
+    {
+      title: 'Zile Întârziere',
+      dataIndex: 'days_overdue',
+      key: 'days_overdue',
+      render: (days, record) => {
+        const color = record.aging_bucket === '90+' ? 'red' :
+                     record.aging_bucket === '61-90' ? 'orange' :
+                     record.aging_bucket === '31-60' ? 'gold' : 'volcano';
+        return (
+          <AntTooltip title={`Interval: ${record.aging_bucket} zile`}>
+            <Tag color={color} icon={<ClockCircleOutlined />}>
+              {days} zile
+            </Tag>
+          </AntTooltip>
+        );
+      },
+      align: 'center',
+    },
+  ];
+
+  // Custom tooltip component
+  const CustomChartTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div style={{
-          backgroundColor: 'white',
-          padding: '10px',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-        }}>
-          <p style={{ margin: 0 }}><strong>{payload[0].name}</strong></p>
-          <p style={{ margin: 0 }}>Număr: {payload[0].value}</p>
-          {payload[0].payload.amount && (
-            <p style={{ margin: 0 }}>Sumă: {formatCurrency(payload[0].payload.amount)}</p>
+        <div className="pm-chart-tooltip">
+          <p className="pm-chart-tooltip__label">{label}</p>
+          {payload.map((entry, index) => (
+            <div key={index} className="pm-chart-tooltip__item">
+              <span
+                className="pm-chart-tooltip__dot"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span>{entry.name}: {formatCurrency(entry.value)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Custom pie tooltip
+  const CustomPieTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="pm-chart-tooltip">
+          <p className="pm-chart-tooltip__label">{payload[0].name}</p>
+          <div className="pm-chart-tooltip__item">
+            <span>Număr: {payload[0].value}</span>
+          </div>
+          {payload[0].payload.amount !== undefined && (
+            <div className="pm-chart-tooltip__item">
+              <span>Sumă: {formatCurrency(payload[0].payload.amount)}</span>
+            </div>
           )}
         </div>
       );
@@ -188,351 +396,580 @@ const Dashboard = () => {
     return null;
   };
 
+  const companyBalance = parseFloat(summary.company_balance || 0);
+  const unpaidCount = summary.unpaid_invoices?.count || 0;
+
   return (
-    <div>
-      <Title level={2} style={{ marginBottom: 24 }}>Dashboard</Title>
+    <div className="pm-dashboard">
+      {/* Dashboard Header */}
+      <div className="pm-dashboard__header">
+        <Title level={2} className="pm-dashboard__title">Dashboard</Title>
+        <p className="pm-dashboard__subtitle">
+          Vizualizare generală a proprietăților și finanțelor
+        </p>
+      </div>
 
-      {/* KPI Widgets */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} md={8} lg={8} xl={4} xxl={4}>
-          <Card style={{ minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
-            <Statistic
-              title="Chiriași Activi"
-              value={summary.active_tenants || 0}
-              prefix={<UserOutlined />}
-              styles={{ value: { color: '#3f8600' } }}
-            />
-          </Card>
-        </Col>
+      {/* KPI Stats */}
+      <div className="pm-dashboard__stats">
+        <StatCard
+          title="Chiriași Activi"
+          value={summary.active_tenants || 0}
+          icon={<UserOutlined />}
+          variant="success"
+        />
 
-        <Col xs={24} sm={12} md={8} lg={8} xl={5} xxl={5}>
-          <Card style={{ minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
-            <Statistic
-              title="Sold Companie"
-              value={parseFloat(summary.company_balance || 0)}
-              prefix={<BankOutlined />}
-              styles={{ value: { color: parseFloat(summary.company_balance || 0) >= 0 ? '#3f8600' : '#cf1322' } }}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
+        <StatCard
+          title="Sold Companie"
+          value={companyBalance}
+          icon={<BankOutlined />}
+          variant={companyBalance >= 0 ? 'success' : 'error'}
+          formatter={(val) => formatCurrency(val)}
+          decimals={2}
+          coloredValue
+        />
 
-        <Col xs={24} sm={12} md={8} lg={8} xl={5} xxl={5}>
-          <Card style={{ minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
-            <Statistic
-              title="Facturi Neplătite"
-              value={summary.unpaid_invoices?.count || 0}
-              prefix={<FileTextOutlined />}
-              styles={{ value: { color: summary.unpaid_invoices?.count > 0 ? '#cf1322' : '#3f8600' } }}
-            />
-            {summary.unpaid_invoices?.total && parseFloat(summary.unpaid_invoices.total) > 0 && (
-              <div style={{ marginTop: 8, fontSize: '14px', color: '#666' }}>
-                Total: {formatCurrency(parseFloat(summary.unpaid_invoices.total))}
-              </div>
-            )}
-          </Card>
-        </Col>
+        <StatCard
+          title="Facturi Neplătite"
+          value={unpaidCount}
+          icon={<FileTextOutlined />}
+          variant={unpaidCount > 0 ? 'error' : 'success'}
+          secondary={summary.unpaid_invoices?.total && parseFloat(summary.unpaid_invoices.total) > 0
+            ? `Total: ${formatCurrency(parseFloat(summary.unpaid_invoices.total))}`
+            : null
+          }
+        />
 
-        <Col xs={24} sm={12} md={12} lg={12} xl={5} xxl={5}>
-          <Card style={{ minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
-            <Statistic
-              title="Cheltuieli Luna Curentă"
-              value={parseFloat(summary.monthly_expenses || 0)}
-              prefix={<CreditCardOutlined />}
-              styles={{ value: { color: '#cf1322' } }}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
+        <StatCard
+          title="Cheltuieli Luna Curentă"
+          value={parseFloat(summary.monthly_expenses || 0)}
+          icon={<CreditCardOutlined />}
+          variant="warning"
+          formatter={(val) => formatCurrency(val)}
+          decimals={2}
+        />
 
-        <Col xs={24} sm={12} md={12} lg={12} xl={5} xxl={5}>
-          <Card style={{ minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
-            <Statistic
-              title="Chirie Totală Așteptată"
-              value={parseFloat(summary.total_expected_rent || 0)}
-              prefix={<DollarOutlined />}
-              styles={{ value: { color: '#1890ff' } }}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
-      </Row>
+        <StatCard
+          title="Chirie Totală Așteptată"
+          value={parseFloat(summary.total_expected_rent || 0)}
+          icon={<DollarOutlined />}
+          variant="info"
+          formatter={(val) => formatCurrency(val)}
+          decimals={2}
+        />
+      </div>
 
-      {/* Charts Section */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        {/* Cash Flow Timeline */}
-        <Col xs={24}>
-          <Card title="Fluxul de Numerar - Istoric 12 Luni" style={{ height: '450px' }}>
-            {cashFlowLoading ? (
-              <div style={{ textAlign: 'center', padding: '50px' }}>
-                <Spin />
-              </div>
-            ) : cashFlowChartData.length > 0 ? (
+      {/* Cash Flow Chart - Full Width */}
+      <CollapsibleSection
+        title="Fluxul de Numerar"
+        icon={<DollarOutlined />}
+        storageKey="dashboard-cash-flow"
+      >
+        <div className="pm-dashboard__charts" style={{ marginBottom: 'var(--pm-space-lg)' }}>
+          <div className="pm-dashboard__chart--full">
+            <ChartCard
+              subtitle="Istoric 12 Luni"
+              loading={cashFlowLoading}
+              empty={!cashFlowChartData.length}
+              emptyText="Datele vor apărea după ce începeți să emiteți facturi și să înregistrați plăți"
+              height={350}
+            >
               <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={cashFlowChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                <AreaChart data={cashFlowChartData}>
+                  <defs>
+                    <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorIssued" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
                   <XAxis
                     dataKey="name"
-                    label={{ value: 'Lună', position: 'insideBottom', offset: -5 }}
+                    tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }}
+                    axisLine={{ stroke: isDarkMode ? '#334155' : '#e2e8f0' }}
                   />
                   <YAxis
-                    label={{ value: 'Valoare (RON)', angle: -90, position: 'insideLeft' }}
+                    tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }}
+                    axisLine={{ stroke: isDarkMode ? '#334155' : '#e2e8f0' }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                   />
-                  <Tooltip
-                    formatter={(value) => {
-                      const numValue = typeof value === 'number' ? value : parseFloat(value || 0);
-                      return formatCurrency(numValue);
-                    }}
-                    labelStyle={{ color: '#000' }}
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="circle"
                   />
-                  <Legend />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="receivedPayments"
                     name="Plăți Primite"
-                    stroke="#52c41a"
+                    stroke="#10b981"
                     strokeWidth={2}
-                    dot={{ r: 4 }}
+                    fill="url(#colorReceived)"
                   />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="invoicesIssued"
                     name="Facturi Emise"
-                    stroke="#1890ff"
+                    stroke="#3b82f6"
                     strokeWidth={2}
-                    dot={{ r: 4 }}
+                    fill="url(#colorIssued)"
                   />
                   <Line
                     type="monotone"
                     dataKey="paymentsMade"
                     name="Plăți Efectuate"
-                    stroke="#ff4d4f"
+                    stroke="#ef4444"
                     strokeWidth={2}
-                    dot={{ r: 4 }}
+                    dot={{ r: 3, fill: '#ef4444' }}
                   />
                   <Line
                     type="monotone"
                     dataKey="utilityInvoices"
                     name="Facturi Utilități"
-                    stroke="#faad14"
+                    stroke="#f59e0b"
                     strokeWidth={2}
-                    dot={{ r: 4 }}
+                    dot={{ r: 3, fill: '#f59e0b' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* Utility Cost Evolution Chart - Full Width */}
+      <CollapsibleSection
+        title="Evoluție Costuri Utilități"
+        icon={<ThunderboltOutlined />}
+        storageKey="dashboard-utility-evolution"
+      >
+        <div className="pm-dashboard__charts" style={{ marginBottom: 'var(--pm-space-lg)' }}>
+          <div className="pm-dashboard__chart--full">
+            <ChartCard
+              subtitle="Istoric 12 Luni pe Tip Utilitate"
+              loading={utilityEvolutionLoading}
+              empty={!utilityEvolutionChartData.length}
+              emptyText="Datele vor apărea după ce înregistrați facturi de utilități"
+              height={350}
+            >
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={utilityEvolutionChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 11 }}
+                    axisLine={{ stroke: isDarkMode ? '#334155' : '#e2e8f0' }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis
+                    tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }}
+                    axisLine={{ stroke: isDarkMode ? '#334155' : '#e2e8f0' }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="circle"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="electricity"
+                    name="Electricitate"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#f59e0b' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="gas"
+                    name="Gaz"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#ef4444' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="water"
+                    name="Apă"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#3b82f6' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="internet"
+                    name="Internet"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#8b5cf6' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="salubrity"
+                    name="Salubritate"
+                    stroke="#06b6d4"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#06b6d4' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    name="Total"
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#10b981' }}
+                    strokeDasharray="5 5"
                   />
                 </LineChart>
               </ResponsiveContainer>
-            ) : (
-              <div style={{
-                textAlign: 'center',
-                padding: '80px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 12
-              }}>
-                <BarChartOutlined style={{ fontSize: 48, color: '#d9d9d9' }} />
-                <div style={{ fontSize: 16, color: '#999' }}>
-                  Nu există date de fluxul de numerar
-                </div>
-                <div style={{ fontSize: 14, color: '#bfbfbf' }}>
-                  Datele vor apărea după ce începeți să emiteți facturi și să înregistrați plăți
-                </div>
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
+            </ChartCard>
+          </div>
+        </div>
+      </CollapsibleSection>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        {/* Expenses by Utility Type */}
-        <Col xs={24} md={12} lg={8}>
-          <Card title="Cheltuieli pe Tip Utilitate" style={{ height: '400px' }}>
-            {utilityCostsLoading ? (
-              <div style={{ textAlign: 'center', padding: '50px' }}>
-                <Spin />
-              </div>
-            ) : utilityChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={utilityChartData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {utilityChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div style={{
-                          backgroundColor: 'white',
-                          padding: '10px',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                        }}>
-                          <p style={{ margin: 0 }}><strong>{payload[0].name}</strong></p>
-                          <p style={{ margin: 0 }}>Sumă: {formatCurrency(payload[0].value)}</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '50px', color: '#999' }}>
-                Nu există date disponibile
-              </div>
-            )}
-          </Card>
-        </Col>
+      {/* Secondary Charts */}
+      <CollapsibleSection
+        title="Grafice Sumar"
+        icon={<FileTextOutlined />}
+        storageKey="dashboard-summary-charts"
+      >
+        <div className="pm-dashboard__charts">
+          {/* Expenses by Utility Type */}
+          <ChartCard
+            title="Cheltuieli pe Tip Utilitate"
+            subtitle="Distribuție curentă"
+            loading={utilityCostsLoading}
+            empty={!utilityChartData.length}
+            height={280}
+          >
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <Pie
+                data={utilityChartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={90}
+                paddingAngle={2}
+                dataKey="value"
+                nameKey="name"
+              >
+                {utilityChartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={COLORS[index % COLORS.length]}
+                    stroke={isDarkMode ? '#1e293b' : '#ffffff'}
+                    strokeWidth={2}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="pm-chart-tooltip">
+                      <p className="pm-chart-tooltip__label">{payload[0].name}</p>
+                      <div className="pm-chart-tooltip__item">
+                        <span>Sumă: {formatCurrency(payload[0].value)}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }} />
+              <Legend
+                verticalAlign="bottom"
+                iconType="circle"
+                formatter={(value) => <span style={{ color: isDarkMode ? '#cbd5e1' : '#475569' }}>{value}</span>}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
         {/* Monthly Expenses Trend */}
-        <Col xs={24} md={12} lg={8}>
-          <Card title="Trend Cheltuieli (6 luni)" style={{ height: '400px' }}>
-            {expensesTrendLoading ? (
-              <div style={{ textAlign: 'center', padding: '50px' }}>
-                <Spin />
-              </div>
-            ) : expensesChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={expensesChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip
-                    formatter={(value) => formatCurrency(value)}
-                    labelStyle={{ color: '#000' }}
-                  />
-                  <Bar dataKey="expenses" fill="#ff4d4f" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '50px', color: '#999' }}>
-                Nu există date disponibile
-              </div>
-            )}
-          </Card>
-        </Col>
+        <ChartCard
+          title="Trend Cheltuieli"
+          subtitle="Ultimele 6 luni"
+          loading={expensesTrendLoading}
+          empty={!expensesChartData.length}
+          height={280}
+        >
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={expensesChartData}>
+              <defs>
+                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={1}/>
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.6}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#334155' : '#e2e8f0'} />
+              <XAxis
+                dataKey="name"
+                tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }}
+                axisLine={{ stroke: isDarkMode ? '#334155' : '#e2e8f0' }}
+              />
+              <YAxis
+                tick={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 }}
+                axisLine={{ stroke: isDarkMode ? '#334155' : '#e2e8f0' }}
+              />
+              <Tooltip content={<CustomChartTooltip />} />
+              <Bar
+                dataKey="expenses"
+                name="Cheltuieli"
+                fill="url(#barGradient)"
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
         {/* Invoices Status */}
-        <Col xs={24} md={12} lg={8}>
-          <Card title="Status Facturi" style={{ height: '400px' }}>
-            {invoicesStatusLoading ? (
-              <div style={{ textAlign: 'center', padding: '50px' }}>
-                <Spin />
-              </div>
-            ) : invoicesStatusChartData.length > 0 && invoicesStatusChartData.some(d => d.value > 0) ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={invoicesStatusChartData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {invoicesStatusChartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.name === 'Plătite' ? PIE_COLORS.paid : PIE_COLORS.unpaid}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip content={CustomTooltip} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '50px', color: '#999' }}>
-                Nu există date disponibile
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Recent Activity Section */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        {/* Recent Received Invoices */}
-        <Col xs={24} lg={12}>
-          <Card title="Facturi Primite Recente">
-            {summary.recent_received_invoices && summary.recent_received_invoices.length > 0 ? (
-              <Table
-                columns={recentInvoicesColumns}
-                dataSource={summary.recent_received_invoices}
-                rowKey="id"
-                pagination={false}
-                size="small"
+        <ChartCard
+          title="Status Facturi"
+          subtitle="Plătite vs Neplătite"
+          loading={invoicesStatusLoading}
+          empty={!invoicesStatusChartData.length || !invoicesStatusChartData.some(d => d.value > 0)}
+          height={280}
+        >
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <Pie
+                data={invoicesStatusChartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={90}
+                paddingAngle={2}
+                dataKey="value"
+                nameKey="name"
+              >
+                {invoicesStatusChartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.name === 'Plătite' ? PIE_COLORS.paid : PIE_COLORS.unpaid}
+                    stroke={isDarkMode ? '#1e293b' : '#ffffff'}
+                    strokeWidth={2}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomPieTooltip />} />
+              <Legend
+                verticalAlign="bottom"
+                iconType="circle"
+                formatter={(value) => <span style={{ color: isDarkMode ? '#cbd5e1' : '#475569' }}>{value}</span>}
               />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
-                Nu există facturi recente
-              </div>
-            )}
-          </Card>
-        </Col>
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
+        </div>
+      </CollapsibleSection>
 
-        {/* Upcoming Due Invoices */}
-        <Col xs={24} lg={12}>
-          <Card
+      {/* Tenant Balances & Overdue Invoices Section */}
+      <CollapsibleSection
+        title="Situație Financiară Chiriași"
+        icon={<DollarOutlined />}
+        storageKey="dashboard-tenant-finances"
+      >
+        <div className="pm-dashboard__tables">
+        {/* Tenant Balances */}
+        <ChartCard
+          title={
+            <span>
+              <BankOutlined style={{ color: 'var(--pm-color-primary)', marginRight: 8 }} />
+              Balanță Chiriași
+            </span>
+          }
+          loading={tenantBalancesLoading}
+          empty={!tenantBalances.length}
+          emptyText="Nu există chiriași activi"
+        >
+          {balancesSummary.total_receivable && parseFloat(balancesSummary.total_receivable) > 0 && (
+            <div style={{
+              padding: 'var(--pm-space-sm) var(--pm-space-md)',
+              marginBottom: 'var(--pm-space-md)',
+              background: 'var(--pm-color-error-light)',
+              borderRadius: 'var(--pm-radius-md)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span style={{ color: 'var(--pm-color-error-dark)', fontWeight: 500 }}>
+                <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                Total de Încasat
+              </span>
+              <span style={{ color: 'var(--pm-color-error)', fontWeight: 700, fontSize: '1.1em' }}>
+                {formatCurrency(parseFloat(balancesSummary.total_receivable))}
+              </span>
+            </div>
+          )}
+          <Table
+            columns={tenantBalanceColumns}
+            dataSource={tenantBalances.filter(t => parseFloat(t.balance) !== 0 || t.unpaid_count > 0)}
+            rowKey="tenant_id"
+            pagination={false}
+            size="small"
+            className="pm-dashboard__recent-table"
+            locale={{ emptyText: 'Toți chiriașii sunt la zi' }}
+          />
+        </ChartCard>
+
+        {/* Overdue Invoices */}
+        <ChartCard
+          title={
+            <span>
+              <ExclamationCircleOutlined style={{ color: 'var(--pm-color-error)', marginRight: 8 }} />
+              Facturi Restante
+            </span>
+          }
+          loading={overdueLoading}
+          empty={!overdueInvoices.length}
+          emptyText="Nu există facturi restante"
+        >
+          {overdueSummary.total_overdue && parseFloat(overdueSummary.total_overdue) > 0 && (
+            <div style={{
+              padding: 'var(--pm-space-sm) var(--pm-space-md)',
+              marginBottom: 'var(--pm-space-md)',
+              background: 'var(--pm-color-error-light)',
+              borderRadius: 'var(--pm-radius-md)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--pm-space-xs)' }}>
+                <span style={{ color: 'var(--pm-color-error-dark)', fontWeight: 500 }}>
+                  Total Restant ({overdueSummary.count} facturi)
+                </span>
+                <span style={{ color: 'var(--pm-color-error)', fontWeight: 700, fontSize: '1.1em' }}>
+                  {formatCurrency(parseFloat(overdueSummary.total_overdue))}
+                </span>
+              </div>
+              {agingSummary.length > 0 && (
+                <div style={{ display: 'flex', gap: 'var(--pm-space-sm)', flexWrap: 'wrap', marginTop: 'var(--pm-space-xs)' }}>
+                  {agingSummary.map(([bucket, data]) => (
+                    <Tag key={bucket} color={bucket === '90+' ? 'red' : bucket === '61-90' ? 'orange' : bucket === '31-60' ? 'gold' : 'volcano'}>
+                      {bucket} zile: {data.count}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <Table
+            columns={overdueColumns}
+            dataSource={overdueInvoices.slice(0, 10)}
+            rowKey="id"
+            pagination={false}
+            size="small"
+            className="pm-dashboard__recent-table"
+          />
+          {overdueInvoices.length > 10 && (
+            <div style={{ textAlign: 'center', marginTop: 'var(--pm-space-md)' }}>
+              <Link to="/reports?tab=overdue">
+                <Button type="link">Vezi toate ({overdueInvoices.length})</Button>
+              </Link>
+            </div>
+          )}
+        </ChartCard>
+        </div>
+      </CollapsibleSection>
+
+      {/* Recent Activity Tables */}
+      <CollapsibleSection
+        title="Facturi Recente"
+        icon={<FileSearchOutlined />}
+        storageKey="dashboard-recent-invoices"
+      >
+        <div className="pm-dashboard__tables">
+          {/* Recent Received Invoices */}
+          <ChartCard
+            title="Facturi Primite Recente"
+            empty={!Array.isArray(summary.recent_received_invoices) || !summary.recent_received_invoices.length}
+            emptyText="Nu există facturi recente"
+          >
+            <Table
+              columns={recentInvoicesColumns}
+              dataSource={Array.isArray(summary.recent_received_invoices) ? summary.recent_received_invoices : []}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              className="pm-dashboard__recent-table"
+            />
+          </ChartCard>
+
+          {/* Upcoming Due Invoices */}
+          <ChartCard
             title={
               <span>
-                <WarningOutlined style={{ color: '#faad14', marginRight: 8 }} />
+                <WarningOutlined style={{ color: 'var(--pm-color-warning)', marginRight: 8 }} />
                 Facturi Cu Scadență Apropiată
               </span>
             }
+            empty={!Array.isArray(summary.upcoming_due_invoices) || !summary.upcoming_due_invoices.length}
+            emptyText="Nu există facturi cu scadență apropiată"
           >
-            {summary.upcoming_due_invoices && summary.upcoming_due_invoices.length > 0 ? (
-              <Table
-                columns={upcomingDueColumns}
-                dataSource={summary.upcoming_due_invoices}
-                rowKey="id"
-                pagination={false}
-                size="small"
-              />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
-                Nu există facturi cu scadență apropiată
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
+            <Table
+              columns={upcomingDueColumns}
+              dataSource={Array.isArray(summary.upcoming_due_invoices) ? summary.upcoming_due_invoices : []}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              className="pm-dashboard__recent-table"
+            />
+          </ChartCard>
+        </div>
+      </CollapsibleSection>
+
+      {/* Activity Log */}
+      <CollapsibleSection
+        title="Activitate Recentă"
+        icon={<HistoryOutlined />}
+        storageKey="dashboard-activity-log"
+      >
+        <div className="pm-dashboard__activity-section">
+          <div className="pm-activity-log-card">
+            <div className="pm-activity-log-card__content">
+              <ActivityLogWidget limit={10} />
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
 
       {/* Quick Actions */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col span={24}>
-          <Card title="Acțiuni Rapide">
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <Link to="/invoices">
-                <Button type="primary">Creare Factură Nouă</Button>
-              </Link>
-              <Link to="/tenants">
-                <Button>Gestionare Chiriași</Button>
-              </Link>
-              <Link to="/meter-readings">
-                <Button>Adăugare Index Contor</Button>
-              </Link>
-              <Link to="/utility-calculations">
-                <Button>Calcule Utilități</Button>
-              </Link>
-              <Link to="/received-invoices">
-                <Button>Facturi Primite</Button>
-              </Link>
-            </div>
-          </Card>
-        </Col>
-      </Row>
+      <CollapsibleSection
+        title="Acțiuni Rapide"
+        icon={<PlusOutlined />}
+        storageKey="dashboard-quick-actions"
+      >
+      <div className="pm-dashboard__actions">
+        <Link to="/invoices">
+          <Button type="primary" icon={<PlusOutlined />}>
+            Creare Factură Nouă
+          </Button>
+        </Link>
+        <Link to="/tenants">
+          <Button icon={<TeamOutlined />}>
+            Gestionare Chiriași
+          </Button>
+        </Link>
+        <Link to="/meter-readings">
+          <Button icon={<ThunderboltOutlined />}>
+            Adăugare Index Contor
+          </Button>
+        </Link>
+        <Link to="/utility-calculations">
+          <Button icon={<CalculatorOutlined />}>
+            Calcule Utilități
+          </Button>
+        </Link>
+        <Link to="/received-invoices">
+          <Button icon={<FileSearchOutlined />}>
+            Facturi Primite
+          </Button>
+        </Link>
+      </div>
+      </CollapsibleSection>
     </div>
   );
 };

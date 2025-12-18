@@ -1,18 +1,18 @@
 import { create } from 'zustand';
 
+// Note: JWT is now stored in HttpOnly cookie (not accessible via JavaScript)
+// We only store user info and CSRF token in localStorage
 const useAuthStore = create((set, get) => ({
-  token: localStorage.getItem('token') || null,
   csrfToken: localStorage.getItem('csrf_token') || null,
   user: JSON.parse(localStorage.getItem('user') || 'null'),
-  isAuthenticated: !!localStorage.getItem('token'),
+  isAuthenticated: !!localStorage.getItem('user'),
 
-  setAuth: (token, user, csrfToken) => {
-    localStorage.setItem('token', token);
+  setAuth: (user, csrfToken) => {
     localStorage.setItem('user', JSON.stringify(user));
     if (csrfToken) {
       localStorage.setItem('csrf_token', csrfToken);
     }
-    set({ token, user, csrfToken: csrfToken || get().csrfToken, isAuthenticated: true });
+    set({ user, csrfToken: csrfToken || get().csrfToken, isAuthenticated: true });
   },
 
   setCsrfToken: (csrfToken) => {
@@ -21,10 +21,9 @@ const useAuthStore = create((set, get) => ({
   },
 
   logout: () => {
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('csrf_token');
-    set({ token: null, user: null, csrfToken: null, isAuthenticated: false });
+    set({ user: null, csrfToken: null, isAuthenticated: false });
   },
 
   updateUser: (user) => {

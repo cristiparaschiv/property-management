@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf);
 use Try::Tiny;
 
 =head1 NAME
@@ -144,6 +144,9 @@ Security notes:
 put '/api/profile' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $user = var('user');
     my $data = request->data;

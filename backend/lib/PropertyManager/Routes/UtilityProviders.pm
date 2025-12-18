@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf);
 
 prefix '/api/utility-providers';
 
@@ -36,6 +36,9 @@ post '' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $data = request->data;
     unless ($data->{name} && $data->{type}) {
         status 400;
@@ -60,6 +63,9 @@ put '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $provider = schema->resultset('UtilityProvider')->find(route_parameters->get('id'));
     unless ($provider) {
         status 404;
@@ -77,6 +83,9 @@ put '/:id' => sub {
 del '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $provider = schema->resultset('UtilityProvider')->find(route_parameters->get('id'));
     unless ($provider) {

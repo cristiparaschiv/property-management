@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf);
 
 prefix '/api/templates';
 
@@ -29,6 +29,9 @@ post '' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $data = request->data;
     unless ($data->{name} && $data->{html_template}) {
         status 400;
@@ -43,6 +46,9 @@ put '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $template = schema->resultset('InvoiceTemplate')->find(route_parameters->get('id'));
     return { success => 0, error => 'Template not found' } unless $template;
 
@@ -53,6 +59,9 @@ put '/:id' => sub {
 del '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $template = schema->resultset('InvoiceTemplate')->find(route_parameters->get('id'));
     return { success => 0, error => 'Template not found' } unless $template;
@@ -69,6 +78,9 @@ del '/:id' => sub {
 post '/:id/set-default' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $template = schema->resultset('InvoiceTemplate')->find(route_parameters->get('id'));
     return { success => 0, error => 'Template not found' } unless $template;

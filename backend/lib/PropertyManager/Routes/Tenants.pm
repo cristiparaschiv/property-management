@@ -4,7 +4,8 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf get_current_user);
+use PropertyManager::Services::ActivityLogger;
 use Try::Tiny;
 
 prefix '/api/tenants';
@@ -60,6 +61,9 @@ get '/:id' => sub {
 post '' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $data = request->data;
 
@@ -117,6 +121,18 @@ post '' => sub {
         return { success => 0, error => 'Failed to create tenant' };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_create(
+        schema(),
+        'tenant',
+        $tenant->id,
+        $tenant->name,
+        sprintf('Chiriaș nou adăugat: %s', $tenant->name),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { tenant => { $tenant->get_columns } } };
 };
 
@@ -124,6 +140,9 @@ post '' => sub {
 put '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $tenant = schema->resultset('Tenant')->find(route_parameters->get('id'));
     unless ($tenant) {
@@ -164,6 +183,18 @@ put '/:id' => sub {
         return { success => 0, error => 'Failed to update tenant' };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_update(
+        schema(),
+        'tenant',
+        $tenant->id,
+        $tenant->name,
+        sprintf('Chiriaș modificat: %s', $tenant->name),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { tenant => { $tenant->get_columns } } };
 };
 
@@ -172,13 +203,29 @@ del '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $tenant = schema->resultset('Tenant')->find(route_parameters->get('id'));
     unless ($tenant) {
         status 404;
         return { success => 0, error => 'Tenant not found' };
     }
 
+    my $tenant_name = $tenant->name;
     $tenant->update({ is_active => 0 });
+
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_delete(
+        schema(),
+        'tenant',
+        $tenant->id,
+        $tenant_name,
+        sprintf('Chiriaș dezactivat: %s', $tenant_name),
+        $user ? $user->{id} : undef,
+        request->address
+    );
 
     return { success => 1, message => 'Tenant deactivated' };
 };
@@ -187,6 +234,9 @@ del '/:id' => sub {
 put '/:id/percentages' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $tenant = schema->resultset('Tenant')->find(route_parameters->get('id'));
     unless ($tenant) {

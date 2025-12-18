@@ -58,8 +58,8 @@ const Login = () => {
       if (data.success) {
         // Clear any existing errors
         setErrorMessage(null);
-        // Store JWT token, user info, and CSRF token
-        setAuth(data.data.token, data.data.user, data.data.csrf_token);
+        // Store user info and CSRF token (JWT is now in HttpOnly cookie)
+        setAuth(data.data.user, data.data.csrf_token);
         message.success('Autentificare reușită!');
         navigate('/');
       } else {
@@ -89,7 +89,7 @@ const Login = () => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #10b981 100%)',
       }}
     >
       <Card
@@ -99,7 +99,11 @@ const Login = () => {
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: 28, marginBottom: 8 }}>PropertyManager</h1>
+          <img
+            src="/assets/domistra-2-logo.png"
+            alt="Domistra"
+            style={{ height: 200, marginBottom: 8 }}
+          />
           <p style={{ color: '#888' }}>Sistem de Management Proprietăți</p>
         </div>
 
@@ -122,15 +126,15 @@ const Login = () => {
           onFieldsChange={clearError}
           autoComplete="off"
           size="large"
+          validateTrigger={['onChange', 'onBlur']}
         >
           <Form.Item
             name="username"
             rules={[
-              {
-                required: true,
-                message: 'Vă rugăm introduceți numele de utilizator!',
-              },
+              { required: true, message: 'Vă rugăm introduceți numele de utilizator!' },
+              { min: 3, message: 'Utilizatorul trebuie să aibă minim 3 caractere' }
             ]}
+            hasFeedback
           >
             <Input
               prefix={<UserOutlined />}
@@ -141,11 +145,10 @@ const Login = () => {
           <Form.Item
             name="password"
             rules={[
-              {
-                required: true,
-                message: 'Vă rugăm introduceți parola!',
-              },
+              { required: true, message: 'Vă rugăm introduceți parola!' },
+              { min: 6, message: 'Parola trebuie să aibă minim 6 caractere' }
             ]}
+            hasFeedback
           >
             <Input.Password
               prefix={<LockOutlined />}

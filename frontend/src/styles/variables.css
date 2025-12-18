@@ -1,0 +1,167 @@
+/**
+ * CSS Custom Properties - Property Management System
+ * Slate & Emerald Theme
+ */
+
+:root {
+  /* Primary Colors - Emerald */
+  --pm-color-primary-50: #ecfdf5;
+  --pm-color-primary-100: #d1fae5;
+  --pm-color-primary-200: #a7f3d0;
+  --pm-color-primary-300: #6ee7b7;
+  --pm-color-primary-400: #34d399;
+  --pm-color-primary: #10b981;
+  --pm-color-primary-600: #059669;
+  --pm-color-primary-700: #047857;
+  --pm-color-primary-800: #065f46;
+  --pm-color-primary-900: #064e3b;
+
+  /* Slate Colors */
+  --pm-color-slate-50: #f8fafc;
+  --pm-color-slate-100: #f1f5f9;
+  --pm-color-slate-200: #e2e8f0;
+  --pm-color-slate-300: #cbd5e1;
+  --pm-color-slate-400: #94a3b8;
+  --pm-color-slate-500: #64748b;
+  --pm-color-slate-600: #475569;
+  --pm-color-slate-700: #334155;
+  --pm-color-slate-800: #1e293b;
+  --pm-color-slate-900: #0f172a;
+  --pm-color-slate-950: #020617;
+
+  /* Semantic Colors */
+  --pm-color-success: #10b981;
+  --pm-color-success-light: #d1fae5;
+  --pm-color-success-dark: #065f46;
+  --pm-color-warning: #f59e0b;
+  --pm-color-warning-light: #fef3c7;
+  --pm-color-warning-dark: #b45309;
+  --pm-color-error: #ef4444;
+  --pm-color-error-light: #fee2e2;
+  --pm-color-error-dark: #b91c1c;
+  --pm-color-info: #3b82f6;
+  --pm-color-info-light: #dbeafe;
+  --pm-color-info-dark: #1d4ed8;
+
+  /* Background Colors - Light Mode */
+  --pm-color-bg-primary: #f8fafc;
+  --pm-color-bg-secondary: #ffffff;
+  --pm-color-bg-tertiary: #f1f5f9;
+  --pm-color-bg-elevated: #ffffff;
+  --pm-color-bg-glass: rgba(255, 255, 255, 0.8);
+  --pm-color-bg-sidebar: #0f172a;
+  --pm-color-bg-sidebar-hover: rgba(255, 255, 255, 0.1);
+
+  /* Text Colors - Light Mode */
+  --pm-color-text-primary: #0f172a;
+  --pm-color-text-secondary: #475569;
+  --pm-color-text-tertiary: #94a3b8;
+  --pm-color-text-inverse: #ffffff;
+  --pm-color-text-muted: #64748b;
+
+  /* Border Colors - Light Mode */
+  --pm-color-border-default: #e2e8f0;
+  --pm-color-border-strong: #cbd5e1;
+  --pm-color-border-subtle: #f1f5f9;
+
+  /* Spacing */
+  --pm-space-xs: 4px;
+  --pm-space-sm: 8px;
+  --pm-space-md: 16px;
+  --pm-space-lg: 24px;
+  --pm-space-xl: 32px;
+  --pm-space-2xl: 48px;
+  --pm-space-3xl: 64px;
+
+  /* Border Radius */
+  --pm-radius-sm: 4px;
+  --pm-radius-md: 8px;
+  --pm-radius-lg: 12px;
+  --pm-radius-xl: 16px;
+  --pm-radius-2xl: 24px;
+  --pm-radius-full: 9999px;
+
+  /* Shadows - Light Mode */
+  --pm-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --pm-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --pm-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --pm-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --pm-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.12);
+  --pm-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --pm-shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+
+  /* Transitions */
+  --pm-transition-fast: 150ms ease;
+  --pm-transition-normal: 250ms ease;
+  --pm-transition-slow: 350ms ease;
+  --pm-transition-bounce: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Typography */
+  --pm-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --pm-font-size-xs: 12px;
+  --pm-font-size-sm: 14px;
+  --pm-font-size-md: 16px;
+  --pm-font-size-lg: 18px;
+  --pm-font-size-xl: 20px;
+  --pm-font-size-2xl: 24px;
+  --pm-font-size-3xl: 30px;
+  --pm-font-size-4xl: 36px;
+  --pm-font-weight-normal: 400;
+  --pm-font-weight-medium: 500;
+  --pm-font-weight-semibold: 600;
+  --pm-font-weight-bold: 700;
+
+  /* Z-Index */
+  --pm-z-dropdown: 1000;
+  --pm-z-sticky: 1020;
+  --pm-z-fixed: 1030;
+  --pm-z-modal-backdrop: 1040;
+  --pm-z-modal: 1050;
+  --pm-z-popover: 1060;
+  --pm-z-tooltip: 1070;
+
+  /* Layout */
+  --pm-sidebar-width: 250px;
+  --pm-sidebar-collapsed-width: 80px;
+  --pm-header-height: 64px;
+}
+
+/* Dark Mode Overrides */
+[data-theme='dark'] {
+  /* Background Colors */
+  --pm-color-bg-primary: #0f172a;
+  --pm-color-bg-secondary: #1e293b;
+  --pm-color-bg-tertiary: #334155;
+  --pm-color-bg-elevated: #1e293b;
+  --pm-color-bg-glass: rgba(30, 41, 59, 0.8);
+  --pm-color-bg-sidebar: #020617;
+  --pm-color-bg-sidebar-hover: rgba(255, 255, 255, 0.05);
+
+  /* Text Colors */
+  --pm-color-text-primary: #f8fafc;
+  --pm-color-text-secondary: #cbd5e1;
+  --pm-color-text-tertiary: #64748b;
+  --pm-color-text-inverse: #0f172a;
+  --pm-color-text-muted: #94a3b8;
+
+  /* Border Colors */
+  --pm-color-border-default: #334155;
+  --pm-color-border-strong: #475569;
+  --pm-color-border-subtle: #1e293b;
+
+  /* Shadows - Darker for dark mode */
+  --pm-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --pm-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --pm-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --pm-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --pm-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --pm-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.2);
+  --pm-shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+
+  /* Adjusted semantic colors for dark mode (slightly brighter) */
+  --pm-color-primary: #34d399;
+  --pm-color-success: #34d399;
+  --pm-color-warning: #fbbf24;
+  --pm-color-error: #f87171;
+  --pm-color-info: #60a5fa;
+}

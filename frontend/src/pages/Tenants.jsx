@@ -1,28 +1,48 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Table,
   Button,
-  Space,
   Modal,
   Form,
   Input,
   InputNumber,
   Switch,
   message,
-  Popconfirm,
   Tag,
-  Card,
-  Dropdown,
-  Typography,
+  Spin,
+  Select,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, MoreOutlined, PercentageOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PercentageOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  StopOutlined,
+  MailOutlined,
+  PhoneOutlined,
+  EuroOutlined,
+  CalendarOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tenantsService } from '../services/tenantsService';
 import { formatEuro } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS } from '../constants/utilityTypes';
 import EmptyState from '../components/EmptyState';
-
-const { Title } = Typography;
+import CardRow, {
+  CardRowPrimary,
+  CardRowTitle,
+  CardRowSecondary,
+  CardRowDetail,
+  ActionButton,
+} from '../components/ui/CardRow';
+import {
+  ListSummaryCards,
+  SummaryCard,
+  ListPageHeader,
+  ListToolbar,
+} from '../components/ui/ListSummaryCards';
 
 const Tenants = () => {
   const [form] = Form.useForm();
@@ -32,7 +52,8 @@ const Tenants = () => {
   const [isPercentagesModalOpen, setIsPercentagesModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState(null);
   const [selectedTenant, setSelectedTenant] = useState(null);
-  const searchInput = useRef(null);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const { data, isLoading } = useQuery({
     queryKey: ['tenants'],
@@ -128,183 +149,184 @@ const Tenants = () => {
     });
   };
 
-  const getColumnSearchProps = (dataIndex, placeholder) => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-      <div style={{ padding: 8 }}>
-        <Input
-          ref={searchInput}
-          placeholder={placeholder}
-          value={selectedKeys[0]}
-          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-          onPressEnter={() => confirm()}
-          style={{ marginBottom: 8, display: 'block' }}
-        />
-        <Space>
-          <Button
-            type="primary"
-            onClick={() => confirm()}
-            icon={<SearchOutlined />}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Caută
-          </Button>
-          <Button
-            onClick={() => {
-              clearFilters();
-              confirm();
-            }}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Resetează
-          </Button>
-        </Space>
-      </div>
-    ),
-    filterIcon: (filtered) => (
-      <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
-    ),
-    onFilter: (value, record) =>
-      record[dataIndex]
-        ?.toString()
-        .toLowerCase()
-        .includes(value.toLowerCase()),
-    filterDropdownProps: {
-      onOpenChange: (visible) => {
-        if (visible) {
-          setTimeout(() => searchInput.current?.select(), 100);
-        }
-      },
-    },
-  });
-
-  const columns = [
-    {
-      title: 'Nume',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      ...getColumnSearchProps('name', 'Caută după nume'),
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
-      ...getColumnSearchProps('email', 'Caută după email'),
-    },
-    {
-      title: 'Telefon',
-      dataIndex: 'phone',
-      key: 'phone',
-      ...getColumnSearchProps('phone', 'Caută după telefon'),
-    },
-    {
-      title: 'Oraș',
-      dataIndex: 'city',
-      key: 'city',
-      ...getColumnSearchProps('city', 'Caută după oraș'),
-    },
-    {
-      title: 'Chirie (EUR)',
-      dataIndex: 'rent_amount_eur',
-      key: 'rent_amount_eur',
-      render: (value) => formatEuro(value),
-      sorter: (a, b) => a.rent_amount_eur - b.rent_amount_eur,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'Activ' : 'Inactiv'}
-        </Tag>
-      ),
-      filters: [
-        { text: 'Activ', value: true },
-        { text: 'Inactiv', value: false },
-      ],
-      onFilter: (value, record) => record.is_active === value,
-    },
-    {
-      title: 'Acțiuni',
-      key: 'actions',
-      render: (_, record) => {
-        const items = [
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Editează',
-            onClick: () => showEditModal(record),
-          },
-          {
-            key: 'percentages',
-            icon: <PercentageOutlined />,
-            label: 'Procente',
-            onClick: () => showPercentagesModal(record),
-          },
-          {
-            key: 'deactivate',
-            icon: <DeleteOutlined />,
-            label: 'Dezactivează',
-            danger: true,
-            onClick: () => {
-              Modal.confirm({
-                title: 'Sigur doriți să dezactivați acest chiriaș?',
-                onOk: () => deleteMutation.mutate(record.id),
-                okText: 'Da',
-                cancelText: 'Nu',
-              });
-            },
-          },
-        ];
-
-        return (
-          <Dropdown
-            menu={{ items }}
-            trigger={['click']}
-          >
-            <Button icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
-    },
-  ];
+  const handleDelete = (tenant) => {
+    Modal.confirm({
+      title: 'Sigur doriți să dezactivați acest chiriaș?',
+      content: `Chiriașul "${tenant.name}" va fi marcat ca inactiv.`,
+      onOk: () => deleteMutation.mutate(tenant.id),
+      okText: 'Da, dezactivează',
+      cancelText: 'Anulează',
+      okButtonProps: { danger: true },
+    });
+  };
 
   const tenants = data?.data?.tenants || [];
 
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    const total = tenants.length;
+    const active = tenants.filter((t) => t.is_active).length;
+    const inactive = tenants.filter((t) => !t.is_active).length;
+    // For "expiring soon" we'd need contract_end date - placeholder for now
+    const expiring = 0;
+    return { total, active, inactive, expiring };
+  }, [tenants]);
+
+  // Filter tenants
+  const filteredTenants = useMemo(() => {
+    return tenants.filter((tenant) => {
+      const matchesSearch =
+        !searchText ||
+        tenant.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        tenant.email?.toLowerCase().includes(searchText.toLowerCase()) ||
+        tenant.phone?.includes(searchText);
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && tenant.is_active) ||
+        (statusFilter === 'inactive' && !tenant.is_active);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [tenants, searchText, statusFilter]);
+
+  // Get row status based on tenant state
+  const getRowStatus = (tenant) => {
+    if (!tenant.is_active) return 'error';
+    // Could add warning for expiring contracts
+    return 'success';
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>Chiriași</Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={showCreateModal}
-        >
-          Adaugă Chiriaș
-        </Button>
-      </div>
+      <ListPageHeader
+        title="Chiriași"
+        subtitle="Gestionează chiriașii și procentele de utilități"
+        action={
+          <Button type="primary" icon={<PlusOutlined />} onClick={showCreateModal}>
+            Adaugă Chiriaș
+          </Button>
+        }
+      />
 
-      <Card>
-        {tenants.length === 0 && !isLoading ? (
+      <ListSummaryCards>
+        <SummaryCard
+          icon={<UserOutlined />}
+          value={stats.total}
+          label="Total Chiriași"
+          variant="default"
+        />
+        <SummaryCard
+          icon={<CheckCircleOutlined />}
+          value={stats.active}
+          label="Activi"
+          variant="success"
+        />
+        <SummaryCard
+          icon={<ClockCircleOutlined />}
+          value={stats.expiring}
+          label="Expiră curând"
+          variant="warning"
+        />
+        <SummaryCard
+          icon={<StopOutlined />}
+          value={stats.inactive}
+          label="Inactivi"
+          variant="error"
+        />
+      </ListSummaryCards>
+
+      <ListToolbar>
+        <Input.Search
+          placeholder="Caută după nume, email sau telefon..."
+          allowClear
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+        <Select
+          value={statusFilter}
+          onChange={setStatusFilter}
+          style={{ width: 150 }}
+          options={[
+            { value: 'all', label: 'Toate' },
+            { value: 'active', label: 'Activi' },
+            { value: 'inactive', label: 'Inactivi' },
+          ]}
+        />
+      </ListToolbar>
+
+      <div className="pm-card-row-list">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '48px' }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredTenants.length === 0 ? (
           <EmptyState
-            description="Nu aveți încă chiriași înregistrați. Începeți prin a adăuga primul chiriaș."
-            actionText="Adaugă Primul Chiriaș"
-            onAction={showCreateModal}
+            description={
+              searchText || statusFilter !== 'all'
+                ? 'Nu s-au găsit chiriași care să corespundă criteriilor.'
+                : 'Nu aveți încă chiriași înregistrați. Începeți prin a adăuga primul chiriaș.'
+            }
+            actionText={!searchText && statusFilter === 'all' ? 'Adaugă Primul Chiriaș' : null}
+            onAction={!searchText && statusFilter === 'all' ? showCreateModal : null}
           />
         ) : (
-          <Table
-            columns={columns}
-            dataSource={tenants}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{ pageSize: 10 }}
-          />
+          filteredTenants.map((tenant) => (
+            <CardRow
+              key={tenant.id}
+              status={getRowStatus(tenant)}
+              onClick={() => showEditModal(tenant)}
+              actions={
+                <>
+                  <ActionButton
+                    icon={<EditOutlined />}
+                    onClick={() => showEditModal(tenant)}
+                    variant="edit"
+                    title="Editează"
+                  />
+                  <ActionButton
+                    icon={<PercentageOutlined />}
+                    onClick={() => showPercentagesModal(tenant)}
+                    variant="view"
+                    title="Procente utilități"
+                  />
+                  <ActionButton
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDelete(tenant)}
+                    variant="delete"
+                    title="Dezactivează"
+                  />
+                </>
+              }
+            >
+              <CardRowPrimary>
+                <CardRowTitle>{tenant.name}</CardRowTitle>
+                <Tag color={tenant.is_active ? 'green' : 'default'}>
+                  {tenant.is_active ? 'Activ' : 'Inactiv'}
+                </Tag>
+              </CardRowPrimary>
+              <CardRowSecondary>
+                {tenant.email && (
+                  <CardRowDetail icon={<MailOutlined />}>{tenant.email}</CardRowDetail>
+                )}
+                {tenant.phone && (
+                  <CardRowDetail icon={<PhoneOutlined />}>{tenant.phone}</CardRowDetail>
+                )}
+                {tenant.rent_amount_eur > 0 && (
+                  <CardRowDetail icon={<EuroOutlined />}>
+                    {formatEuro(tenant.rent_amount_eur)}/lună
+                  </CardRowDetail>
+                )}
+                {tenant.city && (
+                  <CardRowDetail icon={<CalendarOutlined />}>{tenant.city}</CardRowDetail>
+                )}
+              </CardRowSecondary>
+            </CardRow>
+          ))
         )}
-      </Card>
+      </div>
 
+      {/* Add/Edit Tenant Modal */}
       <Modal
         title={editingTenant ? 'Editare Chiriaș' : 'Adăugare Chiriaș'}
         open={isModalOpen}
@@ -319,83 +341,108 @@ const Tenants = () => {
         cancelText="Anulează"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{ is_active: true }}
-        >
+        <Form form={form} layout="vertical" initialValues={{ is_active: true }} validateTrigger={['onChange', 'onBlur']}>
           <Form.Item
             label="Nume"
             name="name"
-            rules={[{ required: true, message: 'Numele este obligatoriu' }]}
+            rules={[
+              { required: true, message: 'Numele este obligatoriu' },
+              { min: 2, message: 'Numele trebuie să aibă minim 2 caractere' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input prefix={<UserOutlined style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="ex: Ion Popescu" />
           </Form.Item>
 
           <Form.Item
             label="Email"
             name="email"
-            rules={[{ type: 'email', message: 'Email invalid' }]}
+            rules={[
+              { type: 'email', message: 'Email invalid' },
+              { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Format email invalid' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input prefix={<MailOutlined style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="ex: ion@exemplu.ro" />
           </Form.Item>
 
           <Form.Item
             label="Telefon"
             name="phone"
+            rules={[
+              { pattern: /^[0-9+\-\s()]+$/, message: 'Număr de telefon invalid' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input prefix={<PhoneOutlined style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="ex: 0722 123 456" />
           </Form.Item>
 
           <Form.Item
             label="Adresă"
             name="address"
-            rules={[{ required: true, message: 'Adresa este obligatorie' }]}
+            rules={[
+              { required: true, message: 'Adresa este obligatorie' },
+              { min: 5, message: 'Adresa trebuie să fie mai detaliată' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input placeholder="ex: Str. Exemplu nr. 10, ap. 5" />
           </Form.Item>
 
           <Form.Item
             label="Oraș"
             name="city"
-            rules={[{ required: true, message: 'Orașul este obligatoriu' }]}
+            rules={[
+              { required: true, message: 'Orașul este obligatoriu' },
+              { min: 2, message: 'Numele orașului este prea scurt' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input placeholder="ex: București" />
           </Form.Item>
 
           <Form.Item
             label="Județ"
             name="county"
-            rules={[{ required: true, message: 'Județul este obligatoriu' }]}
+            rules={[
+              { required: true, message: 'Județul este obligatoriu' },
+              { min: 2, message: 'Numele județului este prea scurt' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input placeholder="ex: Ilfov" />
           </Form.Item>
 
           <Form.Item
             label="Cod Poștal"
             name="postal_code"
+            rules={[
+              { pattern: /^\d{6}$/, message: 'Codul poștal trebuie să aibă 6 cifre' }
+            ]}
+            hasFeedback
           >
-            <Input />
+            <Input placeholder="ex: 012345" maxLength={6} />
           </Form.Item>
 
           <Form.Item
             label="Chirie Lunară (EUR)"
             name="rent_amount_eur"
-            rules={[{ required: true, message: 'Chiria este obligatorie' }]}
+            rules={[
+              { required: true, message: 'Chiria este obligatorie' },
+              { type: 'number', min: 0, message: 'Chiria nu poate fi negativă' }
+            ]}
+            hasFeedback
           >
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="ex: 500" prefix={<EuroOutlined />} />
           </Form.Item>
 
-          <Form.Item
-            label="Activ"
-            name="is_active"
-            valuePropName="checked"
-          >
-            <Switch />
+          <Form.Item label="Activ" name="is_active" valuePropName="checked">
+            <Switch checkedChildren="Da" unCheckedChildren="Nu" />
           </Form.Item>
         </Form>
       </Modal>
 
+      {/* Percentages Modal */}
       <Modal
         title={`Procente Utilități - ${selectedTenant?.name}`}
         open={isPercentagesModalOpen}
@@ -408,10 +455,7 @@ const Tenants = () => {
         cancelText="Anulează"
         confirmLoading={updatePercentagesMutation.isPending}
       >
-        <Form
-          form={percentagesForm}
-          layout="vertical"
-        >
+        <Form form={percentagesForm} layout="vertical">
           {UTILITY_TYPE_OPTIONS.map((option) => (
             <Form.Item
               key={option.value}

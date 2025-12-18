@@ -1,23 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Table,
   Button,
-  Space,
   Modal,
   Form,
   Input,
   Select,
   Switch,
   message,
-  Popconfirm,
   Tag,
-  Card,
-  Dropdown,
+  Spin,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  DashboardOutlined,
+  CheckCircleOutlined,
+  ClusterOutlined,
+  UserOutlined,
+  EnvironmentOutlined,
+  NumberOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { metersService } from '../services/metersService';
 import { tenantsService } from '../services/tenantsService';
+import EmptyState from '../components/EmptyState';
+import CardRow, {
+  CardRowPrimary,
+  CardRowTitle,
+  CardRowSecondary,
+  CardRowDetail,
+  ActionButton,
+} from '../components/ui/CardRow';
+import {
+  ListSummaryCards,
+  SummaryCard,
+  ListPageHeader,
+  ListToolbar,
+} from '../components/ui/ListSummaryCards';
 
 const { Option } = Select;
 
@@ -26,6 +46,8 @@ const Meters = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const { data: metersData, isLoading } = useQuery({
     queryKey: ['meters'],
@@ -97,99 +119,184 @@ const Meters = () => {
     });
   };
 
-  const columns = [
-    {
-      title: 'Nume',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name),
-    },
-    {
-      title: 'Chiriaș',
-      dataIndex: 'tenant_name',
-      key: 'tenant_name',
-      render: (name) => name || '-',
-    },
-    {
-      title: 'Tip',
-      dataIndex: 'is_general',
-      key: 'is_general',
-      render: (isGeneral) => (
-        <Tag color={isGeneral ? 'blue' : 'green'}>
-          {isGeneral ? 'General' : 'Individual'}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Locație',
-      dataIndex: 'location',
-      key: 'location',
-    },
-    {
-      title: 'Acțiuni',
-      key: 'actions',
-      render: (_, record) => {
-        const items = [
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Editează',
-            onClick: () => showEditModal(record),
-          },
-          ...(!record.is_general ? [{
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: 'Șterge',
-            danger: true,
-            onClick: () => {
-              Modal.confirm({
-                title: 'Sigur doriți să ștergeți acest contor?',
-                onOk: () => deleteMutation.mutate(record.id),
-                okText: 'Da',
-                cancelText: 'Nu',
-              });
-            },
-          }] : []),
-        ];
-
-        return (
-          <Dropdown
-            menu={{ items }}
-            trigger={['click']}
-          >
-            <Button icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
-    },
-  ];
+  const handleDelete = (meter) => {
+    Modal.confirm({
+      title: 'Sigur doriți să ștergeți acest contor?',
+      content: `Contorul "${meter.name}" va fi șters permanent.`,
+      onOk: () => deleteMutation.mutate(meter.id),
+      okText: 'Da, șterge',
+      cancelText: 'Anulează',
+      okButtonProps: { danger: true },
+    });
+  };
 
   const meters = metersData?.data || [];
   const tenants = tenantsData?.data?.tenants || [];
 
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    const total = meters.length;
+    const active = meters.filter((m) => m.is_active).length;
+    const general = meters.filter((m) => m.is_general).length;
+    const individual = meters.filter((m) => !m.is_general).length;
+    return { total, active, general, individual };
+  }, [meters]);
+
+  // Filter meters
+  const filteredMeters = useMemo(() => {
+    return meters.filter((meter) => {
+      const matchesSearch =
+        !searchText ||
+        meter.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        meter.tenant_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        meter.location?.toLowerCase().includes(searchText.toLowerCase());
+
+      const matchesType =
+        typeFilter === 'all' ||
+        (typeFilter === 'general' && meter.is_general) ||
+        (typeFilter === 'individual' && !meter.is_general);
+
+      return matchesSearch && matchesType;
+    });
+  }, [meters, searchText, typeFilter]);
+
+  // Get row status based on meter state
+  const getRowStatus = (meter) => {
+    if (!meter.is_active) return 'error';
+    if (meter.is_general) return 'info';
+    return 'success';
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h1>Contoare</h1>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={showCreateModal}
-        >
-          Adaugă Contor
-        </Button>
+      <ListPageHeader
+        title="Contoare"
+        subtitle="Gestionează contoarele de utilități"
+        action={
+          <Button type="primary" icon={<PlusOutlined />} onClick={showCreateModal}>
+            Adaugă Contor
+          </Button>
+        }
+      />
+
+      <ListSummaryCards>
+        <SummaryCard
+          icon={<DashboardOutlined />}
+          value={stats.total}
+          label="Total Contoare"
+          variant="default"
+        />
+        <SummaryCard
+          icon={<CheckCircleOutlined />}
+          value={stats.active}
+          label="Active"
+          variant="success"
+        />
+        <SummaryCard
+          icon={<ClusterOutlined />}
+          value={stats.general}
+          label="Generale"
+          variant="info"
+        />
+        <SummaryCard
+          icon={<UserOutlined />}
+          value={stats.individual}
+          label="Individuale"
+          variant="warning"
+        />
+      </ListSummaryCards>
+
+      <ListToolbar>
+        <Input.Search
+          placeholder="Caută după nume, chiriaș sau locație..."
+          allowClear
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+        <Select
+          value={typeFilter}
+          onChange={setTypeFilter}
+          style={{ width: 150 }}
+          options={[
+            { value: 'all', label: 'Toate' },
+            { value: 'general', label: 'Generale' },
+            { value: 'individual', label: 'Individuale' },
+          ]}
+        />
+      </ListToolbar>
+
+      <div className="pm-card-row-list">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '48px' }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredMeters.length === 0 ? (
+          <EmptyState
+            description={
+              searchText || typeFilter !== 'all'
+                ? 'Nu s-au găsit contoare care să corespundă criteriilor.'
+                : 'Nu aveți contoare înregistrate. Adăugați primul contor pentru a începe.'
+            }
+            actionText={!searchText && typeFilter === 'all' ? 'Adaugă Primul Contor' : null}
+            onAction={!searchText && typeFilter === 'all' ? showCreateModal : null}
+          />
+        ) : (
+          filteredMeters.map((meter) => (
+            <CardRow
+              key={meter.id}
+              status={getRowStatus(meter)}
+              onClick={() => showEditModal(meter)}
+              actions={
+                <>
+                  <ActionButton
+                    icon={<EditOutlined />}
+                    onClick={() => showEditModal(meter)}
+                    variant="edit"
+                    title="Editează"
+                  />
+                  {!meter.is_general && (
+                    <ActionButton
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDelete(meter)}
+                      variant="delete"
+                      title="Șterge"
+                    />
+                  )}
+                </>
+              }
+            >
+              <CardRowPrimary>
+                <CardRowTitle>{meter.name}</CardRowTitle>
+                <Tag color={meter.is_general ? 'blue' : 'green'}>
+                  {meter.is_general ? 'General' : 'Individual'}
+                </Tag>
+                <Tag color={meter.is_active ? 'green' : 'default'}>
+                  {meter.is_active ? 'Activ' : 'Inactiv'}
+                </Tag>
+              </CardRowPrimary>
+              <CardRowSecondary>
+                {meter.tenant_name && (
+                  <CardRowDetail icon={<UserOutlined />}>
+                    {meter.tenant_name}
+                  </CardRowDetail>
+                )}
+                {meter.location && (
+                  <CardRowDetail icon={<EnvironmentOutlined />}>
+                    {meter.location}
+                  </CardRowDetail>
+                )}
+                {meter.serial_number && (
+                  <CardRowDetail icon={<NumberOutlined />}>
+                    S/N: {meter.serial_number}
+                  </CardRowDetail>
+                )}
+              </CardRowSecondary>
+            </CardRow>
+          ))
+        )}
       </div>
 
-      <Card>
-        <Table
-          columns={columns}
-          dataSource={meters}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
-
+      {/* Add/Edit Modal */}
       <Modal
         title={editingMeter ? 'Editare Contor' : 'Adăugare Contor'}
         open={isModalOpen}

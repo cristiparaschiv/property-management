@@ -1,0 +1,263 @@
+/**
+ * Table Styles - Property Management System
+ * Enhanced table designs with animations
+ */
+
+/* Base Table Enhancement */
+.pm-table {
+  border-radius: var(--pm-radius-lg);
+  overflow: hidden;
+}
+
+.pm-table .ant-table {
+  border-radius: var(--pm-radius-lg);
+  background: var(--pm-color-bg-secondary);
+}
+
+/* Table Header */
+.pm-table .ant-table-thead > tr > th {
+  background: var(--pm-color-bg-tertiary) !important;
+  font-weight: var(--pm-font-weight-semibold);
+  font-size: var(--pm-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--pm-color-text-secondary);
+  border-bottom: 2px solid var(--pm-color-border-default) !important;
+  padding: var(--pm-space-sm) var(--pm-space-md) !important;
+  transition: background-color var(--pm-transition-fast);
+}
+
+.pm-table .ant-table-thead > tr > th:hover {
+  background: var(--pm-color-bg-secondary) !important;
+}
+
+/* Sticky Header */
+.pm-table--sticky .ant-table-header {
+  position: sticky;
+  top: var(--pm-header-height);
+  z-index: 10;
+}
+
+.pm-table--sticky .ant-table-thead > tr > th {
+  position: sticky;
+  top: 0;
+}
+
+/* Table Body Rows */
+.pm-table .ant-table-tbody > tr {
+  transition: all var(--pm-transition-fast);
+}
+
+.pm-table .ant-table-tbody > tr > td {
+  padding: var(--pm-space-sm) var(--pm-space-md) !important;
+  border-bottom: 1px solid var(--pm-color-border-subtle) !important;
+  transition: background-color var(--pm-transition-fast);
+}
+
+/* Row Hover Effect */
+.pm-table .ant-table-tbody > tr:hover > td {
+  background: var(--pm-color-bg-tertiary) !important;
+}
+
+/* Row Selected State */
+.pm-table .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: color-mix(in srgb, var(--pm-color-primary) 10%, transparent) !important;
+}
+
+/* Row Animation on Enter */
+.pm-table--animated .ant-table-tbody > tr {
+  animation: pm-table-row-enter 0.3s ease-out backwards;
+}
+
+.pm-table--animated .ant-table-tbody > tr:nth-child(1) { animation-delay: 0ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(2) { animation-delay: 30ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(3) { animation-delay: 60ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(4) { animation-delay: 90ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(5) { animation-delay: 120ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(6) { animation-delay: 150ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(7) { animation-delay: 180ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(8) { animation-delay: 210ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(9) { animation-delay: 240ms; }
+.pm-table--animated .ant-table-tbody > tr:nth-child(10) { animation-delay: 270ms; }
+
+@keyframes pm-table-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Striped Table */
+.pm-table--striped .ant-table-tbody > tr:nth-child(even) > td {
+  background: var(--pm-color-bg-tertiary);
+}
+
+/* Compact Table */
+.pm-table--compact .ant-table-thead > tr > th,
+.pm-table--compact .ant-table-tbody > tr > td {
+  padding: var(--pm-space-xs) var(--pm-space-sm) !important;
+}
+
+/* Bordered Table */
+.pm-table--bordered .ant-table {
+  border: 1px solid var(--pm-color-border-default);
+}
+
+.pm-table--bordered .ant-table-tbody > tr > td {
+  border-right: 1px solid var(--pm-color-border-subtle);
+}
+
+.pm-table--bordered .ant-table-tbody > tr > td:last-child {
+  border-right: none;
+}
+
+/* Action Column */
+.pm-table .ant-table-cell.pm-table__actions {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.pm-table__actions .ant-btn {
+  margin-left: var(--pm-space-xs);
+}
+
+/* Empty State in Table */
+.pm-table .ant-table-placeholder {
+  padding: var(--pm-space-2xl) !important;
+}
+
+.pm-table .ant-empty {
+  margin: var(--pm-space-lg) 0;
+}
+
+/* Table Pagination */
+.pm-table .ant-table-pagination {
+  margin: var(--pm-space-md) 0 0 !important;
+  padding: var(--pm-space-md);
+  background: var(--pm-color-bg-tertiary);
+  border-radius: 0 0 var(--pm-radius-lg) var(--pm-radius-lg);
+}
+
+/* Table Loading State */
+.pm-table .ant-spin-nested-loading > div > .ant-spin {
+  max-height: none;
+}
+
+/* Sortable Column Header */
+.pm-table .ant-table-column-sorter {
+  color: var(--pm-color-text-tertiary);
+}
+
+.pm-table .ant-table-column-sorter-up.active,
+.pm-table .ant-table-column-sorter-down.active {
+  color: var(--pm-color-primary);
+}
+
+/* Filter Icon */
+.pm-table .ant-table-filter-trigger {
+  color: var(--pm-color-text-tertiary);
+  transition: color var(--pm-transition-fast);
+}
+
+.pm-table .ant-table-filter-trigger:hover {
+  color: var(--pm-color-text-primary);
+}
+
+.pm-table .ant-table-filter-trigger.active {
+  color: var(--pm-color-primary);
+}
+
+/* Expandable Rows */
+.pm-table .ant-table-expand-icon-col {
+  width: 40px;
+}
+
+.pm-table .ant-table-row-expand-icon {
+  border-color: var(--pm-color-border-default);
+  transition: all var(--pm-transition-fast);
+}
+
+.pm-table .ant-table-row-expand-icon:hover {
+  border-color: var(--pm-color-primary);
+  color: var(--pm-color-primary);
+}
+
+/* Table Card Wrapper */
+.pm-table-card {
+  background: var(--pm-color-bg-secondary);
+  border: 1px solid var(--pm-color-border-default);
+  border-radius: var(--pm-radius-xl);
+  overflow: hidden;
+}
+
+.pm-table-card__header {
+  padding: var(--pm-space-md) var(--pm-space-lg);
+  border-bottom: 1px solid var(--pm-color-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--pm-color-bg-tertiary);
+}
+
+.pm-table-card__title {
+  font-size: var(--pm-font-size-md);
+  font-weight: var(--pm-font-weight-semibold);
+  color: var(--pm-color-text-primary);
+  margin: 0;
+}
+
+.pm-table-card__actions {
+  display: flex;
+  gap: var(--pm-space-sm);
+}
+
+.pm-table-card__body {
+  padding: 0;
+}
+
+/* Responsive Table */
+@media (max-width: 768px) {
+  .pm-table .ant-table-thead > tr > th,
+  .pm-table .ant-table-tbody > tr > td {
+    padding: var(--pm-space-xs) var(--pm-space-sm) !important;
+    font-size: var(--pm-font-size-xs);
+  }
+
+  .pm-table--responsive {
+    overflow-x: auto;
+  }
+
+  .pm-table--responsive .ant-table {
+    min-width: 600px;
+  }
+}
+
+/* Table Summary Row */
+.pm-table .ant-table-summary {
+  background: var(--pm-color-bg-tertiary);
+}
+
+.pm-table .ant-table-summary > tr > td {
+  font-weight: var(--pm-font-weight-semibold);
+  border-top: 2px solid var(--pm-color-border-default);
+}
+
+/* Selection Column */
+.pm-table .ant-table-selection-column {
+  padding-left: var(--pm-space-md) !important;
+}
+
+/* Fixed Columns Shadow */
+.pm-table .ant-table-cell-fix-left,
+.pm-table .ant-table-cell-fix-right {
+  background: var(--pm-color-bg-secondary);
+}
+
+.pm-table .ant-table-cell-fix-left-last::after,
+.pm-table .ant-table-cell-fix-right-first::after {
+  box-shadow: inset 10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}

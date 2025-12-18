@@ -6,20 +6,16 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Send cookies with requests (for HttpOnly JWT)
 });
 
 // State-changing HTTP methods that require CSRF protection
 const CSRF_METHODS = ['post', 'put', 'delete', 'patch'];
 
-// Request interceptor to add auth token and CSRF token
+// Request interceptor to add CSRF token (JWT is now in HttpOnly cookie)
 api.interceptors.request.use(
   (config) => {
-    const { token, csrfToken } = useAuthStore.getState();
-
-    // Add JWT authorization token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    const { csrfToken } = useAuthStore.getState();
 
     // Add CSRF token for state-changing requests
     if (csrfToken && CSRF_METHODS.includes(config.method?.toLowerCase())) {
@@ -36,13 +32,9 @@ api.interceptors.request.use(
 // Helper function to refresh CSRF token
 const refreshCsrfToken = async () => {
   try {
-    const token = useAuthStore.getState().token;
-    if (!token) return null;
-
+    // JWT is now in HttpOnly cookie, sent automatically with withCredentials
     const response = await axios.post('/api/auth/csrf-refresh', {}, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      withCredentials: true,
     });
 
     if (response.data?.success && response.data?.data?.csrf_token) {

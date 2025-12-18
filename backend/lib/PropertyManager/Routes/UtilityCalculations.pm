@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf);
 use PropertyManager::Services::UtilityCalculator;
 use PropertyManager::Services::MeterDifferenceCalculator;
 use Try::Tiny;
@@ -28,7 +28,16 @@ get '' => sub {
         { order_by => [{ -desc => 'period_year' }, { -desc => 'period_month' }] }
     )->all;
 
-    my @data = map { { $_->get_columns } } @calculations;
+    my @data = map {
+        my %calc = $_->get_columns;
+        # Count invoices generated for this calculation
+        my $invoice_count = schema->resultset('Invoice')->search({
+            calculation_id => $_->id
+        })->count;
+        $calc{invoices_generated} = $invoice_count;
+        \%calc;
+    } @calculations;
+
     return { success => 1, data => \@data };
 };
 
@@ -107,6 +116,9 @@ get '/:id' => sub {
 post '' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $data = request->data;
     my $year = $data->{period_year};
@@ -190,6 +202,9 @@ post '' => sub {
 post '/:id/finalize' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $calc = schema->resultset('UtilityCalculation')->find(route_parameters->get('id'));
     unless ($calc) {

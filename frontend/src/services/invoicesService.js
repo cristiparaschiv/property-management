@@ -39,7 +39,16 @@ export const invoicesService = {
     const response = await api.get(`/invoices/${id}/pdf`, {
       responseType: 'blob',
     });
-    return response.data;
+    // Return both blob and filename from Content-Disposition header
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = 'invoice.pdf';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+      if (match && match[1]) {
+        filename = match[1];
+      }
+    }
+    return { blob: response.data, filename };
   },
 
   markPaid: async (id, paidDate) => {

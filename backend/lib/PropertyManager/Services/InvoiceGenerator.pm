@@ -2,6 +2,7 @@ package PropertyManager::Services::InvoiceGenerator;
 
 use strict;
 use warnings;
+use utf8;
 use Try::Tiny;
 use DateTime;
 
@@ -52,6 +53,12 @@ PropertyManager::Services::InvoiceGenerator - Invoice generation service
   );
 
 =cut
+
+# Romanian month names
+my @ROMANIAN_MONTHS = qw(
+    Ianuarie Februarie Martie Aprilie Mai Iunie
+    Iulie August Septembrie Octombrie Noiembrie Decembrie
+);
 
 sub new {
     my ($class, %args) = @_;
@@ -174,9 +181,8 @@ sub create_rent_invoice {
         die "period_month must be between 1 and 12";
     }
 
-    # Get month name for description
-    my $period_dt = DateTime->new(year => $period_year, month => $period_month, day => 1);
-    my $month_name = $period_dt->month_name;
+    # Get month name in Romanian for description
+    my $month_name = $ROMANIAN_MONTHS[$period_month - 1];
 
     # Handle exchange rate - manual or from service
     my ($exchange_rate, $rate_date, $exchange_rate_manual);
@@ -244,7 +250,7 @@ sub create_rent_invoice {
 
         # Create rent line item with specified period
         $invoice->create_related('items', {
-            description => "Rent for $month_name $period_year",
+            description => "Contravaloare chirie conform contract $month_name $period_year",
             quantity => 1,
             unit_price => $rent_ron,
             vat_rate => 0,
@@ -280,11 +286,6 @@ sub create_rent_invoice {
 Create a utility invoice for a tenant based on a calculation.
 
 =cut
-
-my @ROMANIAN_MONTHS = qw(
-    Ianuarie Februarie Martie Aprilie Mai Iunie
-    Iulie August Septembrie Octombrie Noiembrie Decembrie
-);
 
 sub create_utility_invoice {
     my ($self, %params) = @_;
@@ -344,7 +345,7 @@ sub create_utility_invoice {
     my $period_month = $calculation->period_month;
     my $period_year = $calculation->period_year;
     my $month_name = $ROMANIAN_MONTHS[$period_month - 1];
-    my $item_description = "Contravaloare cheltuieli utilitati - $month_name $period_year";
+    my $item_description = "Contravaloare cheltuieli utilități - $month_name $period_year";
 
     my $invoice;
     $self->{schema}->txn_do(sub {

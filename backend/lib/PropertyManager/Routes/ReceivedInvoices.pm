@@ -4,7 +4,8 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf get_current_user);
+use PropertyManager::Services::ActivityLogger;
 use DateTime;
 use Try::Tiny;
 
@@ -93,6 +94,9 @@ post '' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $data = request->data;
     unless ($data->{provider_id} && $data->{invoice_number} && $data->{invoice_date} &&
             $data->{due_date} && $data->{amount} && $data->{utility_type} &&
@@ -130,12 +134,28 @@ post '' => sub {
         return { success => 0, error => 'Failed to create invoice' };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_create(
+        schema(),
+        'received_invoice',
+        $invoice->id,
+        sprintf('Factură primită #%s - %s', $invoice->invoice_number, $provider->name),
+        sprintf('Factură nouă adăugată: %s de la %s, suma %.2f RON',
+            $invoice->invoice_number, $provider->name, $invoice->amount),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
 put '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'));
     unless ($invoice) {
@@ -167,6 +187,18 @@ put '/:id' => sub {
         return { success => 0, error => 'Failed to update invoice' };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_update(
+        schema(),
+        'received_invoice',
+        $invoice->id,
+        sprintf('Factură primită #%s', $invoice->invoice_number),
+        sprintf('Factură modificată: %s', $invoice->invoice_number),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
@@ -174,13 +206,34 @@ del '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
-    my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'));
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'), { prefetch => 'provider' });
     unless ($invoice) {
         status 404;
         return { success => 0, error => 'Invoice not found' };
     }
 
+    # Store info for logging before delete
+    my $invoice_number = $invoice->invoice_number;
+    my $provider_name = $invoice->provider ? $invoice->provider->name : 'Unknown';
+    my $invoice_id = $invoice->id;
+
     $invoice->delete;
+
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_delete(
+        schema(),
+        'received_invoice',
+        $invoice_id,
+        sprintf('Factură primită #%s - %s', $invoice_number, $provider_name),
+        sprintf('Factură ștearsă: %s de la %s', $invoice_number, $provider_name),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, message => 'Invoice deleted' };
 };
 
@@ -188,7 +241,10 @@ post '/:id/mark-paid' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
-    my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'));
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'), { prefetch => 'provider' });
     unless ($invoice) {
         status 404;
         return { success => 0, error => 'Invoice not found' };
@@ -201,6 +257,7 @@ post '/:id/mark-paid' => sub {
     }
 
     my $paid_date = request->data->{paid_date} || DateTime->now->ymd;
+    my $provider_name = $invoice->provider ? $invoice->provider->name : 'Unknown';
 
     # Use transaction to ensure both invoice and company balance are updated atomically
     my $error;
@@ -226,6 +283,19 @@ post '/:id/mark-paid' => sub {
         return { success => 0, error => 'Failed to mark invoice as paid' };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_payment(
+        schema(),
+        'received_invoice',
+        $invoice->id,
+        sprintf('Factură primită #%s - %s', $invoice->invoice_number, $provider_name),
+        sprintf('Plată înregistrată pentru factura %s de la %s: %.2f RON',
+            $invoice->invoice_number, $provider_name, $invoice->amount),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
@@ -233,7 +303,10 @@ post '/:id/paid-now' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
-    my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'));
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $invoice = schema->resultset('ReceivedInvoice')->find(route_parameters->get('id'), { prefetch => 'provider' });
     unless ($invoice) {
         status 404;
         return { success => 0, error => 'Invoice not found' };
@@ -244,6 +317,8 @@ post '/:id/paid-now' => sub {
         status 400;
         return { success => 0, error => 'Invoice is already marked as paid' };
     }
+
+    my $provider_name = $invoice->provider ? $invoice->provider->name : 'Unknown';
 
     # Use transaction to ensure both invoice and company balance are updated atomically
     my $error;
@@ -268,6 +343,19 @@ post '/:id/paid-now' => sub {
         status 500;
         return { success => 0, error => 'Failed to mark invoice as paid' };
     }
+
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_payment(
+        schema(),
+        'received_invoice',
+        $invoice->id,
+        sprintf('Factură primită #%s - %s', $invoice->invoice_number, $provider_name),
+        sprintf('Plată înregistrată pentru factura %s de la %s: %.2f RON',
+            $invoice->invoice_number, $provider_name, $invoice->amount),
+        $user ? $user->{id} : undef,
+        request->address
+    );
 
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };

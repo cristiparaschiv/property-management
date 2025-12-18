@@ -5,16 +5,32 @@ use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
 use PropertyManager::Services::Auth;
+use PropertyManager::Services::RateLimiter;
 use Try::Tiny;
 
 use Exporter 'import';
-our @EXPORT_OK = qw(require_auth require_csrf);
+our @EXPORT_OK = qw(require_auth require_csrf get_current_user);
 
-# Initialize auth service
-my $auth_service;
+=head2 get_current_user
+
+Returns the current authenticated user from request var.
+Must be called after require_auth().
+
+=cut
+
+sub get_current_user {
+    return var('user') ? { var('user')->get_columns } : undef;
+}
+
+# Initialize services
+my ($auth_service, $rate_limiter);
 
 hook 'before' => sub {
     $auth_service ||= PropertyManager::Services::Auth->new(
+        schema => schema,
+        config => config,
+    );
+    $rate_limiter ||= PropertyManager::Services::RateLimiter->new(
         schema => schema,
         config => config,
     );
@@ -123,6 +139,19 @@ Returns: { success, data: { token, user } }
 
 post '/api/auth/login' => sub {
     my $data = request->data;
+    my $client_ip = request->address;
+
+    # Check rate limiting before processing login
+    my $lockout_info = $rate_limiter->get_lockout_info($client_ip);
+    if ($lockout_info->{is_locked}) {
+        status 429;
+        return {
+            success => 0,
+            error => 'Prea multe încercări de autentificare. Încercați din nou mai târziu.',
+            code => 'RATE_LIMITED',
+            retry_after => $lockout_info->{lockout_remaining},
+        };
+    }
 
     unless ($data->{username} && $data->{password}) {
         status 400;
@@ -147,21 +176,44 @@ post '/api/auth/login' => sub {
     };
 
     unless ($user) {
+        # Record failed login attempt for rate limiting
+        $rate_limiter->record_failed_attempt($client_ip, $data->{username});
+
+        # Get updated lockout info to include in response
+        my $updated_info = $rate_limiter->get_lockout_info($client_ip);
+        my $remaining_attempts = $updated_info->{max_attempts} - $updated_info->{attempts};
+
         status 401;
         return {
             success => 0,
             error => 'Invalid username or password',
             code => 'INVALID_CREDENTIALS',
+            remaining_attempts => $remaining_attempts > 0 ? $remaining_attempts : 0,
         };
     }
+
+    # Successful login - clear failed attempts and record success
+    $rate_limiter->clear_attempts($client_ip);
+    $rate_limiter->record_successful_attempt($client_ip, $data->{username});
 
     my $token = $auth_service->generate_token($user);
     my $csrf_token = $auth_service->generate_csrf_token($user->id);
 
+    # Get JWT expiration from config (default 24 hours)
+    my $jwt_expiration = config->{jwt}{expiration} || 86400;
+
+    # Set JWT in HttpOnly cookie for security
+    cookie auth_token => $token, (
+        expires   => time + $jwt_expiration,
+        http_only => 1,
+        secure    => (config->{environment} || '') eq 'production' ? 1 : 0,
+        same_site => 'Strict',
+        path      => '/',
+    );
+
     return {
         success => 1,
         data => {
-            token => $token,
             csrf_token => $csrf_token,
             user => $user->TO_JSON,
         },
@@ -176,8 +228,14 @@ Invalidates the current session.
 =cut
 
 post '/api/auth/logout' => sub {
-    # For JWT-based auth, logout is primarily client-side (delete token)
-    # Here we could implement token blacklisting if needed
+    # Clear the auth cookie by setting it to empty with past expiration
+    cookie auth_token => '', (
+        expires   => 1,  # Expire immediately (epoch + 1 second)
+        http_only => 1,
+        secure    => (config->{environment} || '') eq 'production' ? 1 : 0,
+        same_site => 'Strict',
+        path      => '/',
+    );
 
     return {
         success => 1,

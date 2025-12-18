@@ -1,8 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Table,
   Button,
-  Space,
   Modal,
   Form,
   Input,
@@ -10,22 +8,45 @@ import {
   Select,
   DatePicker,
   message,
-  Popconfirm,
   Tag,
-  Card,
+  Spin,
   Dropdown,
-  Typography,
+  Tooltip,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CheckOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  EuroOutlined,
+  CalendarOutlined,
+  ShopOutlined,
+  NumberOutlined,
+  HistoryOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { receivedInvoicesService } from '../services/receivedInvoicesService';
 import { utilityProvidersService } from '../services/utilityProvidersService';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
 import EmptyState from '../components/EmptyState';
+import CardRow, {
+  CardRowPrimary,
+  CardRowTitle,
+  CardRowSecondary,
+  CardRowDetail,
+  ActionButton,
+} from '../components/ui/CardRow';
+import {
+  ListSummaryCards,
+  SummaryCard,
+  ListPageHeader,
+  ListToolbar,
+} from '../components/ui/ListSummaryCards';
 import dayjs from 'dayjs';
-
-const { Title } = Typography;
 
 const { Option } = Select;
 
@@ -34,7 +55,12 @@ const ReceivedInvoices = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
-  const searchInput = useRef(null);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [paidDateModalOpen, setPaidDateModalOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
+  const [selectedPaidDate, setSelectedPaidDate] = useState(null);
 
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['received-invoices'],
@@ -85,7 +111,12 @@ const ReceivedInvoices = () => {
   });
 
   const markPaidMutation = useMutation({
-    mutationFn: (id) => receivedInvoicesService.markPaidNow(id),
+    mutationFn: ({ id, paidDate }) => {
+      if (paidDate) {
+        return receivedInvoicesService.markPaid(id, paidDate);
+      }
+      return receivedInvoicesService.markPaidNow(id);
+    },
     onSuccess: () => {
       message.success('Factură marcată ca plătită!');
       queryClient.invalidateQueries(['received-invoices']);
@@ -114,7 +145,6 @@ const ReceivedInvoices = () => {
 
   const handleOk = () => {
     form.validateFields().then((values) => {
-      // Calculate period_start and period_end from the selected month
       const selectedMonth = values.period_month;
       const period_start = selectedMonth.startOf('month').format('YYYY-MM-DD');
       const period_end = selectedMonth.endOf('month').format('YYYY-MM-DD');
@@ -127,7 +157,6 @@ const ReceivedInvoices = () => {
         period_end,
       };
 
-      // Remove period_month from payload as it's not needed by the API
       delete payload.period_month;
 
       if (editingInvoice) {
@@ -138,189 +167,264 @@ const ReceivedInvoices = () => {
     });
   };
 
-  const getColumnSearchProps = (dataIndex, placeholder) => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-      <div style={{ padding: 8 }}>
-        <Input
-          ref={searchInput}
-          placeholder={placeholder}
-          value={selectedKeys[0]}
-          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-          onPressEnter={() => confirm()}
-          style={{ marginBottom: 8, display: 'block' }}
-        />
-        <Space>
-          <Button
-            type="primary"
-            onClick={() => confirm()}
-            icon={<SearchOutlined />}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Caută
-          </Button>
-          <Button
-            onClick={() => {
-              clearFilters();
-              confirm();
-            }}
-            size="small"
-            style={{ width: 90 }}
-          >
-            Resetează
-          </Button>
-        </Space>
-      </div>
-    ),
-    filterIcon: (filtered) => (
-      <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
-    ),
-    onFilter: (value, record) =>
-      record[dataIndex]
-        ?.toString()
-        .toLowerCase()
-        .includes(value.toLowerCase()),
-    filterDropdownProps: {
-      onOpenChange: (visible) => {
-        if (visible) {
-          setTimeout(() => searchInput.current?.select(), 100);
-        }
-      },
-    },
-  });
+  const handleDelete = (invoice) => {
+    Modal.confirm({
+      title: 'Sigur doriți să ștergeți această factură?',
+      content: `Factura "${invoice.invoice_number}" va fi ștearsă permanent.`,
+      onOk: () => deleteMutation.mutate(invoice.id),
+      okText: 'Da, șterge',
+      cancelText: 'Anulează',
+      okButtonProps: { danger: true },
+    });
+  };
 
-  const columns = [
-    {
-      title: 'Furnizor',
-      dataIndex: 'provider_name',
-      key: 'provider_name',
-      ...getColumnSearchProps('provider_name', 'Caută după furnizor'),
-    },
-    {
-      title: 'Nr. Factură',
-      dataIndex: 'invoice_number',
-      key: 'invoice_number',
-      ...getColumnSearchProps('invoice_number', 'Caută după număr'),
-    },
-    {
-      title: 'Data Facturii',
-      dataIndex: 'invoice_date',
-      key: 'invoice_date',
-      render: (date) => formatDate(date),
-      sorter: (a, b) => new Date(a.invoice_date) - new Date(b.invoice_date),
-    },
-    {
-      title: 'Sumă',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (amount) => formatCurrency(amount),
-      sorter: (a, b) => a.amount - b.amount,
-    },
-    {
-      title: 'Tip',
-      dataIndex: 'utility_type',
-      key: 'utility_type',
-      render: (type) => getUtilityTypeLabel(type),
-      filters: UTILITY_TYPE_OPTIONS.map(option => ({
-        text: option.label,
-        value: option.value,
-      })),
-      onFilter: (value, record) => record.utility_type === value,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'is_paid',
-      key: 'is_paid',
-      render: (isPaid) => (
-        <Tag color={isPaid ? 'green' : 'red'}>
-          {isPaid ? 'Plătită' : 'Neplătită'}
-        </Tag>
-      ),
-      filters: [
-        { text: 'Plătită', value: true },
-        { text: 'Neplătită', value: false },
-      ],
-      onFilter: (value, record) => record.is_paid === value,
-    },
-    {
-      title: 'Acțiuni',
-      key: 'actions',
-      render: (_, record) => {
-        const items = [
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Editează',
-            onClick: () => showEditModal(record),
-          },
-          ...(!record.is_paid ? [{
-            key: 'mark-paid',
-            icon: <CheckOutlined />,
-            label: 'Plătită',
-            onClick: () => markPaidMutation.mutate(record.id),
-          }] : []),
-          {
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: 'Șterge',
-            danger: true,
-            onClick: () => {
-              Modal.confirm({
-                title: 'Sigur doriți să ștergeți această factură?',
-                onOk: () => deleteMutation.mutate(record.id),
-                okText: 'Da',
-                cancelText: 'Nu',
-              });
-            },
-          },
-        ];
+  const handleMarkPaidWithDate = (invoice) => {
+    setSelectedInvoiceForPayment(invoice);
+    setSelectedPaidDate(dayjs());
+    setPaidDateModalOpen(true);
+  };
 
-        return (
-          <Dropdown
-            menu={{ items }}
-            trigger={['click']}
-          >
-            <Button icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
+  const handleConfirmPaidDate = () => {
+    if (selectedInvoiceForPayment && selectedPaidDate) {
+      markPaidMutation.mutate({
+        id: selectedInvoiceForPayment.id,
+        paidDate: selectedPaidDate.format('YYYY-MM-DD'),
+      });
+      setPaidDateModalOpen(false);
+      setSelectedInvoiceForPayment(null);
+      setSelectedPaidDate(null);
+    }
+  };
+
+  const getPaymentMenuItems = (invoice) => [
+    {
+      key: 'now',
+      label: 'Plătită Azi',
+      icon: <CheckOutlined />,
+      onClick: () => markPaidMutation.mutate({ id: invoice.id }),
+    },
+    {
+      key: 'custom',
+      label: 'Alege Data',
+      icon: <HistoryOutlined />,
+      onClick: () => handleMarkPaidWithDate(invoice),
     },
   ];
 
   const invoices = invoicesData?.data || [];
   const providers = providersData?.data || [];
 
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    const total = invoices.length;
+    const paid = invoices.filter((i) => i.is_paid).length;
+    const unpaid = invoices.filter((i) => !i.is_paid).length;
+    const totalAmount = invoices.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    const unpaidAmount = invoices
+      .filter((i) => !i.is_paid)
+      .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    return { total, paid, unpaid, totalAmount, unpaidAmount };
+  }, [invoices]);
+
+  // Filter invoices
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const matchesSearch =
+        !searchText ||
+        invoice.provider_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        invoice.invoice_number?.toLowerCase().includes(searchText.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'paid' && invoice.is_paid) ||
+        (statusFilter === 'unpaid' && !invoice.is_paid);
+
+      const matchesType =
+        typeFilter === 'all' || invoice.utility_type === typeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [invoices, searchText, statusFilter, typeFilter]);
+
+  // Get row status based on invoice state
+  const getRowStatus = (invoice) => {
+    if (invoice.is_paid) return 'success';
+    const dueDate = dayjs(invoice.due_date);
+    const today = dayjs();
+    if (dueDate.isBefore(today)) return 'error';
+    if (dueDate.diff(today, 'day') <= 7) return 'warning';
+    return 'default';
+  };
+
+  // Get utility type tag color
+  const getTypeColor = (type) => {
+    const colors = {
+      electricity: 'gold',
+      gas: 'orange',
+      water: 'blue',
+      internet: 'purple',
+      salubrity: 'green',
+      other: 'default',
+    };
+    return colors[type] || 'default';
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={2} style={{ margin: 0 }}>Facturi Primite</Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={showCreateModal}
-        >
-          Adaugă Factură
-        </Button>
-      </div>
+      <ListPageHeader
+        title="Facturi Primite"
+        subtitle="Gestionează facturile primite de la furnizori"
+        action={
+          <Button type="primary" icon={<PlusOutlined />} onClick={showCreateModal}>
+            Adaugă Factură
+          </Button>
+        }
+      />
 
-      <Card>
-        {invoices.length === 0 && !isLoading ? (
+      <ListSummaryCards>
+        <SummaryCard
+          icon={<FileTextOutlined />}
+          value={stats.total}
+          label="Total Facturi"
+          variant="default"
+        />
+        <SummaryCard
+          icon={<CheckCircleOutlined />}
+          value={stats.paid}
+          label="Plătite"
+          variant="success"
+        />
+        <SummaryCard
+          icon={<CloseCircleOutlined />}
+          value={stats.unpaid}
+          label="Neplătite"
+          variant="error"
+          subValue={stats.unpaidAmount > 0 ? formatCurrency(stats.unpaidAmount) : null}
+        />
+        <SummaryCard
+          icon={<EuroOutlined />}
+          value={formatCurrency(stats.totalAmount)}
+          label="Valoare Totală"
+          variant="info"
+        />
+      </ListSummaryCards>
+
+      <ListToolbar>
+        <Input.Search
+          placeholder="Caută după furnizor sau număr factură..."
+          allowClear
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+        <Select
+          value={statusFilter}
+          onChange={setStatusFilter}
+          style={{ width: 150 }}
+          options={[
+            { value: 'all', label: 'Toate' },
+            { value: 'paid', label: 'Plătite' },
+            { value: 'unpaid', label: 'Neplătite' },
+          ]}
+        />
+        <Select
+          value={typeFilter}
+          onChange={setTypeFilter}
+          style={{ width: 180 }}
+          options={[
+            { value: 'all', label: 'Toate Tipurile' },
+            ...UTILITY_TYPE_OPTIONS.map((opt) => ({
+              value: opt.value,
+              label: opt.label,
+            })),
+          ]}
+        />
+      </ListToolbar>
+
+      <div className="pm-card-row-list">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '48px' }}>
+            <Spin size="large" />
+          </div>
+        ) : filteredInvoices.length === 0 ? (
           <EmptyState
-            description="Nu aveți facturi primite înregistrate. Adăugați prima factură de la furnizori."
-            actionText="Adaugă Prima Factură"
-            onAction={showCreateModal}
+            description={
+              searchText || statusFilter !== 'all' || typeFilter !== 'all'
+                ? 'Nu s-au găsit facturi care să corespundă criteriilor.'
+                : 'Nu aveți facturi primite înregistrate. Adăugați prima factură de la furnizori.'
+            }
+            actionText={!searchText && statusFilter === 'all' && typeFilter === 'all' ? 'Adaugă Prima Factură' : null}
+            onAction={!searchText && statusFilter === 'all' && typeFilter === 'all' ? showCreateModal : null}
           />
         ) : (
-          <Table
-            columns={columns}
-            dataSource={invoices}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{ pageSize: 10 }}
-          />
+          filteredInvoices.map((invoice) => (
+            <CardRow
+              key={invoice.id}
+              status={getRowStatus(invoice)}
+              onClick={() => showEditModal(invoice)}
+              actions={
+                <>
+                  <ActionButton
+                    icon={<EditOutlined />}
+                    onClick={() => showEditModal(invoice)}
+                    variant="edit"
+                    title="Editează"
+                  />
+                  {!invoice.is_paid && (
+                    <Tooltip title="Marchează plătită" placement="top">
+                      <Dropdown
+                        menu={{ items: getPaymentMenuItems(invoice) }}
+                        trigger={['click']}
+                      >
+                        <button
+                          className="pm-action-btn pm-action-btn--view"
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Marchează plătită"
+                        >
+                          <CheckOutlined />
+                        </button>
+                      </Dropdown>
+                    </Tooltip>
+                  )}
+                  <ActionButton
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDelete(invoice)}
+                    variant="delete"
+                    title="Șterge"
+                  />
+                </>
+              }
+            >
+              <CardRowPrimary>
+                <CardRowTitle>{invoice.provider_name}</CardRowTitle>
+                <Tag color={getTypeColor(invoice.utility_type)}>
+                  {getUtilityTypeLabel(invoice.utility_type)}
+                </Tag>
+                <Tag color={invoice.is_paid ? 'green' : 'red'}>
+                  {invoice.is_paid ? 'Plătită' : 'Neplătită'}
+                </Tag>
+              </CardRowPrimary>
+              <CardRowSecondary>
+                <CardRowDetail icon={<NumberOutlined />}>
+                  {invoice.invoice_number}
+                </CardRowDetail>
+                <CardRowDetail icon={<EuroOutlined />}>
+                  {formatCurrency(invoice.amount)}
+                </CardRowDetail>
+                <CardRowDetail icon={<CalendarOutlined />}>
+                  {formatDate(invoice.invoice_date)}
+                </CardRowDetail>
+                {invoice.due_date && (
+                  <CardRowDetail icon={<ShopOutlined />}>
+                    Scadent: {formatDate(invoice.due_date)}
+                  </CardRowDetail>
+                )}
+              </CardRowSecondary>
+            </CardRow>
+          ))
         )}
-      </Card>
+      </div>
 
+      {/* Add/Edit Modal */}
       <Modal
         title={editingInvoice ? 'Editare Factură' : 'Adăugare Factură'}
         open={isModalOpen}
@@ -404,6 +508,41 @@ const ReceivedInvoices = () => {
             <DatePicker picker="month" style={{ width: '100%' }} format="MMMM YYYY" placeholder="Selectați luna" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Selectați Data Plății"
+        open={paidDateModalOpen}
+        onOk={handleConfirmPaidDate}
+        onCancel={() => {
+          setPaidDateModalOpen(false);
+          setSelectedInvoiceForPayment(null);
+          setSelectedPaidDate(null);
+        }}
+        okText="Confirmă"
+        cancelText="Anulează"
+        confirmLoading={markPaidMutation.isPending}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>
+            Furnizor: <strong>{selectedInvoiceForPayment?.provider_name}</strong>
+          </p>
+          <p>
+            Factură: <strong>{selectedInvoiceForPayment?.invoice_number}</strong>
+          </p>
+          <p>
+            Sumă: <strong>{formatCurrency(selectedInvoiceForPayment?.amount)}</strong>
+          </p>
+        </div>
+        <Form.Item label="Data Plății" style={{ marginBottom: 0 }}>
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD.MM.YYYY"
+            value={selectedPaidDate}
+            onChange={(date) => setSelectedPaidDate(date)}
+            allowClear={false}
+          />
+        </Form.Item>
       </Modal>
     </div>
   );

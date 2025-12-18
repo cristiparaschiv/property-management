@@ -11,6 +11,8 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-property_management}
       MYSQL_USER: ${DB_USER:-propman}
       MYSQL_PASSWORD: ${DB_PASSWORD:-change_this_password}
+      TZ: Europe/Bucharest
+    command: --default-time-zone=Europe/Bucharest
     volumes:
       - db_data:/var/lib/mysql
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -35,13 +37,28 @@ services:
     container_name: property-backend
     restart: unless-stopped
     environment:
+      TZ: Europe/Bucharest
       DANCER_ENVIRONMENT: ${ENVIRONMENT:-docker}
+      # Database
       DB_HOST: db
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-property_management}
       DB_USER: ${DB_USER:-propman}
       DB_PASSWORD: ${DB_PASSWORD:-change_this_password}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      # Security secrets
       JWT_SECRET: ${JWT_SECRET:-change_this_to_a_very_long_random_string_in_production}
+      SESSION_COOKIE_KEY: ${SESSION_COOKIE_KEY:-change_this_session_key_in_production}
+      CSRF_SECRET: ${CSRF_SECRET:-change_this_csrf_secret_in_production}
+      # Google OAuth
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:5001/api/google/callback}
+      # Application URLs
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      # Rate limiting
+      RATE_LIMIT_MAX_ATTEMPTS: ${RATE_LIMIT_MAX_ATTEMPTS:-5}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-900}
     volumes:
       - ./backend:/app
       - pdf_temp:/tmp/property_invoices

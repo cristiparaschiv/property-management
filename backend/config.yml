@@ -9,7 +9,9 @@ serializer: "JSON"
 
 # Session configuration
 session: "Simple"
-session_cookie_key: "change_this_to_a_random_string_in_production"
+# NOTE: Session cookie key should be set via SESSION_COOKIE_KEY environment variable
+# This fallback is for development only
+session_cookie_key: "dev_session_key_change_in_production"
 
 # Template configuration
 template: "template_toolkit"
@@ -39,14 +41,18 @@ plugins:
         mariadb_init_command: "SET NAMES utf8mb4"
 
 # JWT Configuration
+# NOTE: secret_key should be set via JWT_SECRET environment variable
+# This fallback is for development only
 jwt:
-  secret_key: "change_this_to_a_very_long_random_string_in_production"
+  secret_key: "dev_jwt_secret_change_in_production"
   algorithm: "HS256"
   expiration: 86400  # 24 hours in seconds
 
 # CSRF Protection Configuration
+# NOTE: secret_key should be set via CSRF_SECRET environment variable
 csrf:
   enabled: true
+  secret_key: "dev_csrf_secret_change_in_production"
   expiration: 3600  # 1 hour in seconds (tokens should be refreshed)
 
 # Application-specific settings
@@ -72,6 +78,27 @@ app:
 
   # File upload limits
   max_upload_size: 5242880  # 5MB in bytes
+
+# Google Drive OAuth Configuration
+# Get credentials from Google Cloud Console: https://console.cloud.google.com/
+# NOTE: Credentials should be set via GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET environment variables
+google:
+  client_id: ""
+  client_secret: ""
+  redirect_uri: "http://localhost:5001/api/google/callback"
+
+# Frontend URL (for OAuth redirects)
+# NOTE: Should be set via FRONTEND_URL environment variable
+frontend_url: "http://localhost"
+
+# Database configuration (for backup service)
+# NOTE: Credentials should be set via DB_* environment variables
+database:
+  host: "db"
+  port: 3306
+  name: "property_management"
+  user: "root"
+  password: ""
 
 # CORS Configuration (development only - see environments/production.yml)
 cors:

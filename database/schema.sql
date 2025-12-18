@@ -369,5 +369,117 @@ VALUES (
 );
 
 -- ============================================================================
+-- Table: activity_logs
+-- Description: System activity tracking for audit purposes
+-- ============================================================================
+CREATE TABLE activity_logs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NULL,
+    action_type ENUM('create', 'update', 'delete', 'payment', 'login', 'other') NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id INT UNSIGNED NULL,
+    entity_name VARCHAR(255) NULL,
+    description TEXT NOT NULL,
+    metadata JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_activity_user (user_id),
+    INDEX idx_activity_entity (entity_type, entity_id),
+    INDEX idx_activity_created (created_at),
+    INDEX idx_activity_action (action_type),
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Table: notifications
+-- Description: User notifications for due dates, overdue invoices, etc.
+-- ============================================================================
+CREATE TABLE notifications (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NULL,
+    type ENUM('warning', 'info', 'error', 'success') NOT NULL DEFAULT 'info',
+    category VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    entity_type VARCHAR(50) NULL,
+    entity_id INT UNSIGNED NULL,
+    link VARCHAR(255) NULL,
+    is_read BOOLEAN NOT NULL DEFAULT 0,
+    is_dismissed BOOLEAN NOT NULL DEFAULT 0,
+    expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL,
+
+    INDEX idx_notification_user (user_id),
+    INDEX idx_notification_read (is_read),
+    INDEX idx_notification_category (category),
+    INDEX idx_notification_created (created_at),
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Table: google_drive_config
+-- Description: Google Drive OAuth configuration for backup integration
+-- ============================================================================
+CREATE TABLE google_drive_config (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    access_token TEXT NULL,
+    refresh_token TEXT NULL,
+    token_expiry DATETIME NULL,
+    folder_id VARCHAR(255) NULL COMMENT 'Google Drive folder ID for backups',
+    folder_name VARCHAR(255) NULL,
+    connected_email VARCHAR(255) NULL,
+    connected_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Table: backup_history
+-- Description: Database backup history and status tracking
+-- ============================================================================
+CREATE TABLE backup_history (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    file_name VARCHAR(255) NOT NULL,
+    drive_file_id VARCHAR(255) NULL COMMENT 'Google Drive file ID',
+    file_size BIGINT UNSIGNED NULL,
+    status ENUM('pending', 'creating', 'uploading', 'completed', 'failed') NOT NULL DEFAULT 'pending',
+    error_message TEXT NULL,
+    backup_type ENUM('manual', 'scheduled') NOT NULL DEFAULT 'manual',
+    created_by INT UNSIGNED NULL,
+    started_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_backup_status (status),
+    INDEX idx_backup_created (created_at),
+
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Table: login_attempts
+-- Description: Login attempt tracking for rate limiting / brute force protection
+-- ============================================================================
+CREATE TABLE login_attempts (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    username VARCHAR(255) NULL,
+    is_successful BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_ip_created (ip_address, created_at),
+    INDEX idx_ip_success_created (ip_address, is_successful, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Initialize Google Drive Config (single row)
+-- ============================================================================
+INSERT INTO google_drive_config (id) VALUES (1);
+
+-- ============================================================================
 -- End of Schema
 -- ============================================================================

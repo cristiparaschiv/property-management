@@ -7,6 +7,81 @@ use Dancer2::Plugin::DBIC;
 use Try::Tiny;
 use JSON::MaybeXS;
 
+# ============================================================================
+# ENVIRONMENT VARIABLE OVERRIDES FOR SECRETS
+# ============================================================================
+# Security secrets should ALWAYS be set via environment variables in production.
+# Config file values are only used as development fallbacks.
+# ============================================================================
+
+# Override JWT secret from environment
+if ($ENV{JWT_SECRET}) {
+    config->{jwt}{secret_key} = $ENV{JWT_SECRET};
+}
+
+# Override CSRF secret from environment
+if ($ENV{CSRF_SECRET}) {
+    config->{csrf}{secret_key} = $ENV{CSRF_SECRET};
+}
+
+# Override session cookie key from environment
+if ($ENV{SESSION_COOKIE_KEY}) {
+    set session_cookie_key => $ENV{SESSION_COOKIE_KEY};
+}
+
+# Override Google OAuth credentials from environment
+if ($ENV{GOOGLE_CLIENT_ID}) {
+    config->{google}{client_id} = $ENV{GOOGLE_CLIENT_ID};
+}
+if ($ENV{GOOGLE_CLIENT_SECRET}) {
+    config->{google}{client_secret} = $ENV{GOOGLE_CLIENT_SECRET};
+}
+if ($ENV{GOOGLE_REDIRECT_URI}) {
+    config->{google}{redirect_uri} = $ENV{GOOGLE_REDIRECT_URI};
+}
+
+# Override frontend URL from environment
+if ($ENV{FRONTEND_URL}) {
+    config->{frontend_url} = $ENV{FRONTEND_URL};
+}
+
+# Override database credentials from environment (for backup service)
+if ($ENV{DB_HOST}) {
+    config->{database}{host} = $ENV{DB_HOST};
+}
+if ($ENV{DB_PORT}) {
+    config->{database}{port} = $ENV{DB_PORT};
+}
+if ($ENV{DB_NAME}) {
+    config->{database}{name} = $ENV{DB_NAME};
+}
+if ($ENV{DB_ROOT_PASSWORD}) {
+    config->{database}{password} = $ENV{DB_ROOT_PASSWORD};
+}
+
+# Override DBIC plugin database connection from environment
+# This is the main database connection used by the application
+if ($ENV{DB_HOST} || $ENV{DB_PASSWORD} || $ENV{DB_USER} || $ENV{DB_NAME}) {
+    my $host = $ENV{DB_HOST} || 'db';
+    my $port = $ENV{DB_PORT} || 3306;
+    my $name = $ENV{DB_NAME} || 'property_management';
+    my $user = $ENV{DB_USER} || 'propman';
+    my $pass = $ENV{DB_PASSWORD} || '';
+
+    my $dsn = "dbi:MariaDB:database=$name;host=$host;port=$port";
+    config->{plugins}{DBIC}{default}{dsn} = $dsn;
+    config->{plugins}{DBIC}{default}{user} = $user;
+    config->{plugins}{DBIC}{default}{password} = $pass;
+}
+
+# Rate limiting config from environment
+if ($ENV{RATE_LIMIT_MAX_ATTEMPTS}) {
+    config->{app}{max_login_attempts} = int($ENV{RATE_LIMIT_MAX_ATTEMPTS});
+}
+if ($ENV{RATE_LIMIT_WINDOW_SECONDS}) {
+    config->{app}{lockout_duration} = int($ENV{RATE_LIMIT_WINDOW_SECONDS});
+}
+
 # Import all route modules
 use PropertyManager::Routes::Auth;
 use PropertyManager::Routes::Profile;
@@ -24,6 +99,9 @@ use PropertyManager::Routes::Reports;
 use PropertyManager::Routes::ExchangeRates;
 use PropertyManager::Routes::Search;
 use PropertyManager::Routes::Docs;
+use PropertyManager::Routes::ActivityLogs;
+use PropertyManager::Routes::Notifications;
+use PropertyManager::Routes::GoogleDrive;
 
 our $VERSION = '1.0.0';
 
@@ -106,6 +184,7 @@ hook before => sub {
         '/api/auth/login',        # Login doesn't have CSRF token yet
         '/api/auth/logout',       # Logout is idempotent
         '/api/auth/csrf-refresh', # CSRF refresh uses only JWT auth
+        '/api/google/callback',   # OAuth callback from Google
         '/health',                # Health check
         '/',                      # Root endpoint
     );

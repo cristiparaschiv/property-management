@@ -9,7 +9,6 @@ import {
   message,
   Space,
   Divider,
-  Alert,
   Row,
   Col,
   Statistic,
@@ -17,6 +16,9 @@ import {
   Spin,
   Empty,
   Steps,
+  Tag,
+  Collapse,
+  Alert,
 } from 'antd';
 import {
   CalculatorOutlined,
@@ -26,6 +28,10 @@ import {
   FileDoneOutlined,
   FileAddOutlined,
   CheckCircleOutlined,
+  EuroOutlined,
+  UserOutlined,
+  QuestionCircleOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { utilityCalculationsService } from '../services/utilityCalculationsService';
@@ -35,10 +41,15 @@ import { tenantsService } from '../services/tenantsService';
 import { invoicesService } from '../services/invoicesService';
 import { formatCurrency, formatNumber, getMonthName } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
+import {
+  ListSummaryCards,
+  SummaryCard,
+  ListPageHeader,
+} from '../components/ui/ListSummaryCards';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const UtilityCalculations = () => {
   const [form] = Form.useForm();
@@ -46,17 +57,16 @@ const UtilityCalculations = () => {
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
   const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
   const [tenantPercentages, setTenantPercentages] = useState({});
-  const [isCalculating, setIsCalculating] = useState(false);
 
   // Fetch received invoices for the selected period
-  const { data: invoicesData, isLoading: invoicesLoading, refetch: refetchInvoices } = useQuery({
+  const { data: invoicesData, isLoading: invoicesLoading } = useQuery({
     queryKey: ['received-invoices-period', selectedYear, selectedMonth],
     queryFn: () => receivedInvoicesService.getByPeriod(selectedYear, selectedMonth),
     enabled: !!selectedYear && !!selectedMonth,
   });
 
   // Fetch meter readings for the selected period
-  const { data: readingsData, isLoading: readingsLoading, refetch: refetchReadings } = useQuery({
+  const { data: readingsData, isLoading: readingsLoading } = useQuery({
     queryKey: ['meter-readings-period', selectedYear, selectedMonth],
     queryFn: () => meterReadingsService.getByPeriod(selectedYear, selectedMonth),
     enabled: !!selectedYear && !!selectedMonth,
@@ -134,12 +144,15 @@ const UtilityCalculations = () => {
   const handleGenerateInvoices = async (calculationId) => {
     setGeneratingInvoices(calculationId);
     try {
-      // Get calculation details to find tenants
       const calcDetails = await utilityCalculationsService.getById(calculationId);
       const details = calcDetails?.data?.calculation?.details || [];
-
-      // Group by tenant to avoid duplicate invoices
       const tenantIds = [...new Set(details.map(d => d.tenant_id))];
+
+      if (tenantIds.length === 0) {
+        message.warning('Nu există chiriași cu procente alocate pentru această perioadă. Configurați procentele în panoul din dreapta și salvați calculul din nou.');
+        queryClient.invalidateQueries(['utility-calculations']);
+        return;
+      }
 
       let successCount = 0;
       let errorCount = 0;
@@ -160,6 +173,7 @@ const UtilityCalculations = () => {
       if (successCount > 0) {
         message.success(`${successCount} facturi create cu succes!`);
         queryClient.invalidateQueries(['invoices']);
+        queryClient.invalidateQueries(['utility-calculations']);
       }
       if (errorCount > 0) {
         message.warning(`${errorCount} facturi nu au putut fi create.`);
@@ -198,6 +212,7 @@ const UtilityCalculations = () => {
     createMutation.mutate({
       period_year: selectedYear,
       period_month: selectedMonth,
+      overrides: tenantPercentages,
     });
   };
 
@@ -279,6 +294,30 @@ const UtilityCalculations = () => {
 
   const calculations = calculationsData?.data || [];
 
+  // Check if calculation exists for current period
+  const existingCalculation = useMemo(() => {
+    return calculations.find(
+      (calc) => calc.period_year === selectedYear && calc.period_month === selectedMonth
+    );
+  }, [calculations, selectedYear, selectedMonth]);
+
+  const isPeriodFinalized = existingCalculation?.is_finalized;
+  const hasExistingCalculation = !!existingCalculation;
+
+  // Summary stats
+  const stats = useMemo(() => {
+    const totalInvoicesAmount = invoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+    const totalTenantsAmount = Object.values(tenantCosts).reduce((sum, tc) => sum + tc.total, 0);
+    const totalCompanyAmount = Object.values(companyPortions).reduce((sum, p) => sum + p.amount, 0);
+    return {
+      invoicesCount: invoices.length,
+      totalInvoicesAmount,
+      totalTenantsAmount,
+      totalCompanyAmount,
+      tenantsCount: activeTenants.length,
+    };
+  }, [invoices, tenantCosts, companyPortions, activeTenants]);
+
   const invoicesColumns = [
     {
       title: 'Nr. Factură',
@@ -307,20 +346,16 @@ const UtilityCalculations = () => {
 
   // Calculate meter statistics
   const meterStats = useMemo(() => {
-    // Find GM-001 (General meter - the main reference meter)
-    // This is the general meter that has a reading date (not "Început Lună")
     const generalMeter = readings.find(
       (r) => r.is_general && r.meter_name && !r.meter_name.includes('Început')
     );
 
     const generalConsumption = generalMeter ? Number(generalMeter.consumption) || 0 : 0;
 
-    // Calculate sum of all non-general meter consumptions (excluding GM-002)
     const tenantConsumptionSum = readings
       .filter((r) => !r.is_general)
       .reduce((sum, r) => sum + (Number(r.consumption) || 0), 0);
 
-    // Calculate difference (unallocated consumption)
     const difference = generalConsumption - tenantConsumptionSum;
 
     return {
@@ -341,7 +376,11 @@ const UtilityCalculations = () => {
       title: 'Tip',
       dataIndex: 'is_general',
       key: 'is_general',
-      render: (isGeneral) => (isGeneral ? 'General' : 'Chiriaș'),
+      render: (isGeneral) => (
+        <Tag color={isGeneral ? 'blue' : 'green'}>
+          {isGeneral ? 'General' : 'Chiriaș'}
+        </Tag>
+      ),
     },
     {
       title: 'Index Anterior',
@@ -372,17 +411,13 @@ const UtilityCalculations = () => {
       dataIndex: 'consumption',
       key: 'percentage',
       render: (consumption, record) => {
-        // Don't show percentage for general meters
         if (record.is_general) {
           return '-';
         }
-
-        // Calculate percentage if we have a general meter consumption
         if (meterStats.generalConsumption > 0) {
           const percentage = (Number(consumption) || 0) / meterStats.generalConsumption * 100;
           return <Text>{percentage.toFixed(2)}%</Text>;
         }
-
         return '-';
       },
       align: 'right',
@@ -401,25 +436,28 @@ const UtilityCalculations = () => {
     },
     {
       title: 'Status',
-      dataIndex: 'is_finalized',
-      key: 'is_finalized',
-      render: (isFinalized) => (
-        <span
-          style={{
-            color: isFinalized ? '#52c41a' : '#1890ff',
-            fontWeight: 500,
-          }}
-        >
-          {isFinalized ? 'Finalizat' : 'Draft'}
-        </span>
+      key: 'status',
+      render: (_, record) => (
+        <Space>
+          <Tag color={record.is_finalized ? 'green' : 'blue'}>
+            {record.is_finalized ? 'Finalizat' : 'Draft'}
+          </Tag>
+          {record.invoices_generated > 0 && (
+            <Tag color="purple" icon={<FileDoneOutlined />}>
+              {record.invoices_generated} facturi emise
+            </Tag>
+          )}
+        </Space>
       ),
     },
     {
       title: 'Acțiuni',
       key: 'actions',
-      render: (_, record) => (
-        <Space>
-          {!record.is_finalized && (
+      render: (_, record) => {
+        const hasInvoices = record.invoices_generated > 0;
+
+        if (!record.is_finalized) {
+          return (
             <Button
               type="primary"
               size="small"
@@ -428,20 +466,29 @@ const UtilityCalculations = () => {
             >
               Finalizează
             </Button>
-          )}
-          {record.is_finalized && (
-            <Button
-              type="primary"
-              size="small"
-              icon={<FileDoneOutlined />}
-              onClick={() => handleGenerateInvoices(record.id)}
-              loading={generatingInvoices === record.id}
-            >
-              Emite Facturi
-            </Button>
-          )}
-        </Space>
-      ),
+          );
+        }
+
+        if (hasInvoices) {
+          return (
+            <Tag color="success" icon={<CheckCircleOutlined />}>
+              Complet
+            </Tag>
+          );
+        }
+
+        return (
+          <Button
+            type="primary"
+            size="small"
+            icon={<FileDoneOutlined />}
+            onClick={() => handleGenerateInvoices(record.id)}
+            loading={generatingInvoices === record.id}
+          >
+            Emite Facturi
+          </Button>
+        );
+      },
     },
   ];
 
@@ -449,17 +496,72 @@ const UtilityCalculations = () => {
 
   // Determine current step based on data availability
   const getCurrentStep = () => {
-    if (invoices.length === 0) return 0; // Select Period
-    if (readings.length === 0) return 1; // Add Invoices
-    if (activeTenants.length === 0) return 2; // Add meter readings
-    return 3; // Calculate and Generate
+    if (invoices.length === 0) return 0;
+    if (readings.length === 0) return 1;
+    if (activeTenants.length === 0) return 2;
+    return 3;
   };
 
   const currentStep = getCurrentStep();
 
   return (
     <div>
-      <Title level={2} style={{ marginBottom: 24 }}>Calcule Utilități</Title>
+      <ListPageHeader
+        title="Calcule Utilități"
+        subtitle={`Calculează și distribuie costurile utilităților pentru ${getMonthName(selectedMonth)} ${selectedYear}`}
+        action={
+          <Space>
+            {isPeriodFinalized && (
+              <Tag color="success" icon={<CheckCircleOutlined />}>
+                Perioada finalizată
+              </Tag>
+            )}
+            {hasExistingCalculation && !isPeriodFinalized && (
+              <Tag color="processing">
+                Calcul salvat (Draft)
+              </Tag>
+            )}
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSaveCalculation}
+              loading={createMutation.isPending}
+              disabled={invoices.length === 0 || hasExistingCalculation}
+            >
+              Salvează Calcul
+            </Button>
+          </Space>
+        }
+      />
+
+      <ListSummaryCards>
+        <SummaryCard
+          icon={<FileTextOutlined />}
+          value={stats.invoicesCount}
+          label="Facturi Primite"
+          variant="default"
+          subValue={stats.totalInvoicesAmount > 0 ? formatCurrency(stats.totalInvoicesAmount) : null}
+        />
+        <SummaryCard
+          icon={<UserOutlined />}
+          value={stats.tenantsCount}
+          label="Chiriași Activi"
+          variant="info"
+          subValue={stats.totalTenantsAmount > 0 ? formatCurrency(stats.totalTenantsAmount) : null}
+        />
+        <SummaryCard
+          icon={<EuroOutlined />}
+          value={formatCurrency(stats.totalCompanyAmount)}
+          label="Porțiune Firmă"
+          variant="success"
+        />
+        <SummaryCard
+          icon={<CalculatorOutlined />}
+          value={calculations.length}
+          label="Calcule Salvate"
+          variant="warning"
+        />
+      </ListSummaryCards>
 
       {/* Workflow Steps */}
       <Card style={{ marginBottom: 24 }}>
@@ -468,27 +570,105 @@ const UtilityCalculations = () => {
           items={[
             {
               title: 'Selectare Perioadă',
-              content: 'Alegeți luna și anul',
+              description: 'Alegeți luna și anul',
               icon: <FileTextOutlined />,
             },
             {
               title: 'Adăugare Facturi',
-              content: 'Introduceți facturile primite',
+              description: 'Introduceți facturile primite',
               icon: <FileAddOutlined />,
             },
             {
               title: 'Indexuri Contoare',
-              content: 'Înregistrați citirile contoarelor',
+              description: 'Înregistrați citirile',
               icon: <ThunderboltOutlined />,
             },
             {
               title: 'Calcul și Generare',
-              content: 'Calculați și generați facturi',
+              description: 'Generați facturi',
               icon: <CheckCircleOutlined />,
             },
           ]}
         />
       </Card>
+
+      {/* Help Section */}
+      <Collapse
+        style={{ marginBottom: 24 }}
+        items={[
+          {
+            key: 'help',
+            label: (
+              <Space>
+                <QuestionCircleOutlined />
+                <span>Cum funcționează calculul utilităților?</span>
+              </Space>
+            ),
+            children: (
+              <div className="pm-help-content">
+                <Alert
+                  type="info"
+                  showIcon
+                  icon={<InfoCircleOutlined />}
+                  message="Procesul de calcul și facturare a utilităților"
+                  description={
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ marginBottom: 12 }}>
+                        Această pagină vă permite să calculați și să distribuiți costurile utilităților către chiriași,
+                        pe baza procentelor alocate și a facturilor primite de la furnizori.
+                      </p>
+
+                      <Text strong>Pașii procesului:</Text>
+                      <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Selectare Perioadă:</Text> Alegeți luna și anul pentru care doriți să faceți calculul.
+                          Sistemul va încărca automat facturile primite și indexurile contoarelor pentru perioada selectată.
+                        </li>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Adăugare Facturi Primite:</Text> Asigurați-vă că ați introdus în secțiunea
+                          "Facturi Primite" toate facturile de utilități pentru perioada selectată (electricitate, gaz, apă, internet, salubritate).
+                        </li>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Indexuri Contoare:</Text> Pentru electricitate, înregistrați citirile contoarelor
+                          (atât cel general, cât și cele individuale ale chiriașilor) în secțiunea "Indexuri Contoare".
+                        </li>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Configurare Procente:</Text> În panoul din dreapta, configurați procentele de distribuție
+                          pentru fiecare chiriaș și tip de utilitate. Procentele reprezintă cota parte din factură care va fi
+                          facturată chiriașului. Diferența până la 100% rămâne în sarcina firmei.
+                        </li>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Salvare Calcul:</Text> După configurarea procentelor, apăsați "Salvează Calcul" pentru
+                          a salva calculul curent. Calculul va apărea în tabelul "Calcule Anterioare" cu status "Draft".
+                        </li>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Finalizare:</Text> Apăsați "Finalizează" pentru a bloca calculul. După finalizare,
+                          procentele nu mai pot fi modificate.
+                        </li>
+                        <li style={{ marginBottom: 8 }}>
+                          <Text strong>Emitere Facturi:</Text> După finalizare, apăsați "Emite Facturi" pentru a genera
+                          automat facturile de utilități pentru fiecare chiriaș. Facturile vor apărea în secțiunea "Facturi Emise".
+                        </li>
+                      </ol>
+
+                      <Divider style={{ margin: '12px 0' }} />
+
+                      <Text strong>Observații importante:</Text>
+                      <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                        <li>Procentele se salvează per chiriaș și se păstrează pentru lunile următoare</li>
+                        <li>Diferența dintre consumul general și suma consumurilor individuale apare ca "Nealocat"</li>
+                        <li>Porțiunea nealocată chiriașilor rămâne în sarcina firmei (afișată în verde)</li>
+                        <li>Puteți modifica procentele oricând pentru calcule nefinalizate</li>
+                      </ul>
+                    </div>
+                  }
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {/* Period Selection */}
       <Card style={{ marginBottom: 24 }}>
@@ -514,18 +694,6 @@ const UtilityCalculations = () => {
               style={{ width: 120 }}
               onChange={handlePeriodChange}
             />
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={handleSaveCalculation}
-              loading={createMutation.isPending}
-              disabled={invoices.length === 0}
-            >
-              Salvează Calcul
-            </Button>
           </Form.Item>
         </Form>
       </Card>
@@ -611,14 +779,14 @@ const UtilityCalculations = () => {
                       style={{
                         marginTop: 16,
                         padding: 12,
-                        borderRadius: 4,
-                        border: '1px solid #ffd591',
-                        backgroundColor: 'var(--ant-color-warning-bg)',
+                        borderRadius: 'var(--pm-radius-lg)',
+                        border: '1px solid var(--pm-color-warning)',
+                        backgroundColor: 'var(--pm-color-warning-light)',
                       }}
                     >
                       <Row gutter={16} align="middle">
                         <Col flex="auto">
-                          <Space orientation="vertical" size={0}>
+                          <Space direction="vertical" size={0}>
                             <Text strong style={{ fontSize: 14 }}>
                               Diferență (Nealocat)
                             </Text>
@@ -648,7 +816,7 @@ const UtilityCalculations = () => {
                               styles={{
                                 value: {
                                   fontSize: 18,
-                                  color: meterStats.difference >= 0 ? '#faad14' : '#cf1322',
+                                  color: meterStats.difference >= 0 ? 'var(--pm-color-warning)' : 'var(--pm-color-error)',
                                   fontWeight: 'bold',
                                 }
                               }}
@@ -665,7 +833,7 @@ const UtilityCalculations = () => {
                               styles={{
                                 value: {
                                   fontSize: 16,
-                                  color: '#faad14',
+                                  color: 'var(--pm-color-warning)',
                                 }
                               }}
                             />
@@ -721,15 +889,15 @@ const UtilityCalculations = () => {
                             <div
                               style={{
                                 padding: 8,
-                                borderRadius: 4,
-                                border: '1px solid',
-                                borderColor: 'var(--ant-color-border)',
+                                borderRadius: 'var(--pm-radius-md)',
+                                border: '1px solid var(--pm-color-border-default)',
+                                background: 'var(--pm-color-bg-tertiary)',
                               }}
                             >
                               <Text strong style={{ display: 'block', marginBottom: 4 }}>
                                 {option.label}
                               </Text>
-                              <Space orientation="vertical" size={0} style={{ width: '100%' }}>
+                              <Space direction="vertical" size={0} style={{ width: '100%' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <InputNumber
                                     min={0}
@@ -748,7 +916,7 @@ const UtilityCalculations = () => {
                                 {invoiceTotal > 0 ? (
                                   <Text
                                     style={{
-                                      color: '#1890ff',
+                                      color: 'var(--pm-color-primary)',
                                       fontWeight: 500,
                                     }}
                                   >
@@ -777,7 +945,11 @@ const UtilityCalculations = () => {
 
               {/* Company Portion */}
               {Object.values(companyPortions).some((p) => p.amount > 0) && (
-                <Card size="small" title="Porțiune Firmă" style={{ backgroundColor: '#f6ffed' }}>
+                <Card
+                  size="small"
+                  title="Porțiune Firmă"
+                  style={{ background: 'var(--pm-color-success-light)' }}
+                >
                   <Row gutter={[8, 8]}>
                     {UTILITY_TYPE_OPTIONS.map((option) => {
                       const portion = companyPortions[option.value];
@@ -787,16 +959,16 @@ const UtilityCalculations = () => {
                           <div
                             style={{
                               padding: 8,
-                              borderRadius: 4,
-                              border: '1px solid',
-                              borderColor: 'var(--ant-color-border)',
+                              borderRadius: 'var(--pm-radius-md)',
+                              border: '1px solid var(--pm-color-border-default)',
+                              background: 'var(--pm-color-bg-secondary)',
                             }}
                           >
                             <Text strong>{option.label}</Text>
                             <div>
                               <Text type="secondary">{portion.percentage.toFixed(1)}%</Text>
                               {' = '}
-                              <Text style={{ color: '#52c41a', fontWeight: 500 }}>
+                              <Text style={{ color: 'var(--pm-color-success)', fontWeight: 500 }}>
                                 {formatCurrency(portion.amount)}
                               </Text>
                             </div>
@@ -807,7 +979,7 @@ const UtilityCalculations = () => {
                   </Row>
                   <Divider style={{ margin: '12px 0' }} />
                   <div style={{ textAlign: 'right' }}>
-                    <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
+                    <Text strong style={{ fontSize: 16, color: 'var(--pm-color-success)' }}>
                       Total:{' '}
                       {formatCurrency(
                         Object.values(companyPortions).reduce(

@@ -1,0 +1,121 @@
+/**
+ * Notifications Styles - Property Management System
+ */
+
+/* Notification Bell */
+.pm-notifications-dropdown {
+  width: 380px;
+  background: var(--pm-color-bg-secondary);
+  border-radius: var(--pm-radius-lg);
+  box-shadow: var(--pm-shadow-lg);
+  border: 1px solid var(--pm-color-border-default);
+  overflow: hidden;
+}
+
+.pm-notifications-dropdown__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--pm-space-md);
+  border-bottom: 1px solid var(--pm-color-border-default);
+  background: var(--pm-color-bg-tertiary);
+}
+
+.pm-notifications-dropdown__content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.pm-notification-item {
+  cursor: pointer;
+  transition: background-color var(--pm-transition-fast);
+  padding: var(--pm-space-sm) var(--pm-space-md) !important;
+  border-bottom: 1px solid var(--pm-color-border-default);
+}
+
+.pm-notification-item:hover {
+  background: var(--pm-color-bg-tertiary);
+}
+
+.pm-notification-item--unread {
+  background: var(--pm-color-primary-light);
+}
+
+.pm-notification-item--unread:hover {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.pm-notification-item__message {
+  font-size: var(--pm-font-size-sm);
+  color: var(--pm-color-text-secondary);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+/* Activity Log Widget */
+.pm-activity-item {
+  padding-bottom: var(--pm-space-xs);
+}
+
+.pm-activity-item__header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.pm-activity-item__description {
+  font-size: var(--pm-font-size-sm);
+  color: var(--pm-color-text-primary);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.pm-activity-item__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--pm-space-xs);
+}
+
+/* Activity Log Card */
+.pm-activity-log-card {
+  background: var(--pm-color-bg-secondary);
+  border-radius: var(--pm-radius-lg);
+  border: 1px solid var(--pm-color-border-default);
+  padding: var(--pm-space-lg);
+}
+
+.pm-activity-log-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--pm-space-md);
+  padding-bottom: var(--pm-space-md);
+  border-bottom: 1px solid var(--pm-color-border-default);
+}
+
+.pm-activity-log-card__title {
+  font-size: var(--pm-font-size-lg);
+  font-weight: var(--pm-font-weight-semibold);
+  color: var(--pm-color-text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--pm-space-sm);
+}
+
+.pm-activity-log-card__content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+  .pm-notifications-dropdown {
+    width: calc(100vw - 32px);
+    max-width: 380px;
+  }
+
+  .pm-notification-item {
+    padding: var(--pm-space-xs) var(--pm-space-sm) !important;
+  }
+}

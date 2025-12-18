@@ -4,10 +4,11 @@ use strict;
 use warnings;
 use Dancer2 appname => 'PropertyManager';
 use Dancer2::Plugin::DBIC;
-use PropertyManager::Routes::Auth qw(require_auth);
+use PropertyManager::Routes::Auth qw(require_auth require_csrf get_current_user);
 use PropertyManager::Services::InvoiceGenerator;
 use PropertyManager::Services::BNRExchangeRate;
 use PropertyManager::Services::PDFGenerator;
+use PropertyManager::Services::ActivityLogger;
 use Try::Tiny;
 
 prefix '/api/invoices';
@@ -80,6 +81,9 @@ get '/:id' => sub {
 post '/rent' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $data = request->data;
 
@@ -170,6 +174,19 @@ post '/rent' => sub {
         return { success => 0, error => "Failed to create invoice: $error" };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_create(
+        schema(),
+        'invoice',
+        $invoice->id,
+        sprintf('Factură #%s - %s', $invoice->invoice_number, $tenant->name),
+        sprintf('Factură chirie emisă: %s pentru %s, suma %.2f RON',
+            $invoice->invoice_number, $tenant->name, $invoice->total_ron),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
@@ -177,12 +194,18 @@ post '/utility' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
     my $data = request->data;
 
     unless ($data->{tenant_id} && $data->{calculation_id}) {
         status 400;
         return { success => 0, error => 'tenant_id and calculation_id are required' };
     }
+
+    my $tenant = schema->resultset('Tenant')->find($data->{tenant_id});
+    my $tenant_name = $tenant ? $tenant->name : 'Client';
 
     my ($invoice, $error);
     try {
@@ -197,12 +220,28 @@ post '/utility' => sub {
         return { success => 0, error => "Failed to create invoice: $error" };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_create(
+        schema(),
+        'invoice',
+        $invoice->id,
+        sprintf('Factură #%s - %s', $invoice->invoice_number, $tenant_name),
+        sprintf('Factură utilități emisă: %s pentru %s, suma %.2f RON',
+            $invoice->invoice_number, $tenant_name, $invoice->total_ron),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
 post '/generic' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $data = request->data;
 
@@ -267,8 +306,56 @@ post '/generic' => sub {
         return { success => 0, error => "Failed to create invoice: $error" };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    my $client = $data->{client_name} || 'Client';
+    PropertyManager::Services::ActivityLogger::log_create(
+        schema(),
+        'invoice',
+        $invoice->id,
+        sprintf('Factură #%s - %s', $invoice->invoice_number, $client),
+        sprintf('Factură generică emisă: %s pentru %s, suma %.2f RON',
+            $invoice->invoice_number, $client, $invoice->total_ron),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
+
+my @ROMANIAN_MONTHS = qw(
+    Ianuarie Februarie Martie Aprilie Mai Iunie
+    Iulie August Septembrie Octombrie Noiembrie Decembrie
+);
+
+# Sanitize filename by replacing Romanian diacritics with ASCII equivalents
+sub _sanitize_filename {
+    my ($str) = @_;
+    return '' unless defined $str;
+
+    # Replace Romanian diacritics with ASCII equivalents
+    $str =~ s/ă/a/g;
+    $str =~ s/Ă/A/g;
+    $str =~ s/â/a/g;
+    $str =~ s/Â/A/g;
+    $str =~ s/î/i/g;
+    $str =~ s/Î/I/g;
+    $str =~ s/ș/s/g;
+    $str =~ s/Ș/S/g;
+    $str =~ s/ț/t/g;
+    $str =~ s/Ț/T/g;
+
+    # Also handle the older cedilla variants
+    $str =~ s/ş/s/g;
+    $str =~ s/Ş/S/g;
+    $str =~ s/ţ/t/g;
+    $str =~ s/Ţ/T/g;
+
+    # Remove any other non-ASCII characters
+    $str =~ s/[^\x00-\x7F]//g;
+
+    return $str;
+}
 
 get '/:id/pdf' => sub {
     my $auth_error = require_auth();
@@ -276,7 +363,9 @@ get '/:id/pdf' => sub {
 
     my $user = var('user');
     my $invoice_id = route_parameters->get('id');
-    my $invoice = schema->resultset('Invoice')->find($invoice_id);
+    my $invoice = schema->resultset('Invoice')->find($invoice_id, {
+        prefetch => ['tenant'],
+    });
 
     unless ($invoice) {
         status 404;
@@ -285,7 +374,6 @@ get '/:id/pdf' => sub {
 
     my ($pdf_data, $error);
     try {
-        # Use HTML-based PDF generation for better design and Romanian character support
         $pdf_data = $pdf_gen->generate_invoice_pdf_html($invoice_id, user => $user);
     } catch {
         $error = $_;
@@ -297,16 +385,70 @@ get '/:id/pdf' => sub {
         return { success => 0, error => 'PDF generation failed' };
     }
 
-    # Bypass JSON serializer using send_file with scalar ref for in-memory content
-    send_file \$pdf_data, content_type => 'application/pdf',
-        filename => $invoice->invoice_number . '.pdf';
+    # Build filename based on invoice type
+    # Format: <number without prefix> - <type> <tenant name> <month> <year>.pdf
+    my $invoice_number = $invoice->invoice_number;
+    my $number_only = $invoice_number;
+    $number_only =~ s/^[A-Z]+\s*//;  # Remove prefix (e.g., "ARC 123" -> "123")
+
+    my $tenant_name = $invoice->tenant ? $invoice->tenant->name : ($invoice->client_name || 'Client');
+
+    my ($period_month, $period_year);
+
+    if ($invoice->invoice_type eq 'utility' && $invoice->calculation_id) {
+        my $calculation = schema->resultset('UtilityCalculation')->find($invoice->calculation_id);
+        if ($calculation) {
+            $period_month = $calculation->period_month;
+            $period_year = $calculation->period_year;
+        }
+    }
+
+    # Fallback to invoice date if no calculation period found
+    unless ($period_month && $period_year) {
+        if ($invoice->invoice_date =~ /^(\d{4})-(\d{2})-/) {
+            $period_year = $1;
+            $period_month = int($2);
+        }
+    }
+
+    my $month_name = $ROMANIAN_MONTHS[$period_month - 1] if $period_month;
+
+    # Sanitize tenant name for use in filename (remove diacritics)
+    my $safe_tenant_name = _sanitize_filename($tenant_name);
+
+    my $filename;
+    my $invoice_type = $invoice->invoice_type || '';
+
+    if ($invoice_type eq 'rent') {
+        $filename = "$number_only - chirie $safe_tenant_name $month_name $period_year.pdf";
+    } elsif ($invoice_type eq 'utility') {
+        $filename = "$number_only - chelt. utilitati $safe_tenant_name $month_name $period_year.pdf";
+    } else {
+        $filename = "$invoice_number.pdf";
+    }
+
+    # Write PDF to temp file and serve with custom filename
+    use File::Temp qw(tempfile);
+    my ($fh, $tempfile) = tempfile(SUFFIX => '.pdf', UNLINK => 1);
+    binmode($fh);
+    print $fh $pdf_data;
+    close($fh);
+
+    return send_file($tempfile,
+        content_type => 'application/pdf',
+        filename     => $filename,
+        system_path  => 1,
+    );
 };
 
 post '/:id/mark-paid' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
-    my $invoice = schema->resultset('Invoice')->find(route_parameters->get('id'));
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $invoice = schema->resultset('Invoice')->find(route_parameters->get('id'), { prefetch => 'tenant' });
     return { success => 0, error => 'Invoice not found' } unless $invoice;
 
     # Prevent marking already paid invoice
@@ -316,6 +458,7 @@ post '/:id/mark-paid' => sub {
     }
 
     my $paid_date = request->data->{paid_date} || DateTime->now->ymd;
+    my $client_name = $invoice->tenant ? $invoice->tenant->name : ($invoice->client_name || 'Client');
 
     # Use transaction to ensure both invoice and company balance are updated atomically
     my $error;
@@ -341,12 +484,28 @@ post '/:id/mark-paid' => sub {
         return { success => 0, error => 'Failed to mark invoice as paid' };
     }
 
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_payment(
+        schema(),
+        'invoice',
+        $invoice->id,
+        sprintf('Factură #%s - %s', $invoice->invoice_number, $client_name),
+        sprintf('Plată primită pentru factura %s de la %s: %.2f RON',
+            $invoice->invoice_number, $client_name, $invoice->total_ron),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
 post '/:id/items' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
 
     my $invoice = schema->resultset('Invoice')->find(route_parameters->get('id'));
     return { success => 0, error => 'Invoice not found' } unless $invoice;
@@ -374,7 +533,10 @@ del '/:id' => sub {
     my $auth_error = require_auth();
     return $auth_error if $auth_error;
 
-    my $invoice = schema->resultset('Invoice')->find(route_parameters->get('id'));
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $invoice = schema->resultset('Invoice')->find(route_parameters->get('id'), { prefetch => 'tenant' });
     return { success => 0, error => 'Invoice not found' } unless $invoice;
 
     if ($invoice->is_paid) {
@@ -382,7 +544,25 @@ del '/:id' => sub {
         return { success => 0, error => 'Cannot delete paid invoice' };
     }
 
+    # Store info for logging before delete
+    my $invoice_number = $invoice->invoice_number;
+    my $client_name = $invoice->tenant ? $invoice->tenant->name : ($invoice->client_name || 'Client');
+    my $invoice_id = $invoice->id;
+
     $invoice->delete;
+
+    # Log activity
+    my $user = get_current_user();
+    PropertyManager::Services::ActivityLogger::log_delete(
+        schema(),
+        'invoice',
+        $invoice_id,
+        sprintf('Factură #%s - %s', $invoice_number, $client_name),
+        sprintf('Factură ștearsă: %s pentru %s', $invoice_number, $client_name),
+        $user ? $user->{id} : undef,
+        request->address
+    );
+
     return { success => 1, message => 'Invoice deleted' };
 };
 
