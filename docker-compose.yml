@@ -19,7 +19,7 @@ services:
       # Uncomment the line below to load development seed data (demo tenants, invoices, etc.)
       # - ./database/seeds/development.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     ports:
-      - "3306:3306"
+      - "3307:3306"  # External 3307 to avoid conflict with existing MariaDB
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -99,3 +99,5 @@ volumes:
 networks:
   property-network:
     driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
