@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domistra API Documentation</title>
+    <style>
+        :root {
+            --primary: #1890ff;
+            --success: #52c41a;
+            --warning: #faad14;
+            --error: #ff4d4f;
+            --bg: #f5f5f5;
+            --card-bg: #fff;
+            --text: #333;
+            --text-secondary: #666;
+            --border: #e8e8e8;
+            --code-bg: #f6f8fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px 0;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .nav-section {
+            padding: 10px 20px;
+        }
+
+        .nav-section h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text);
+            text-decoration: none;
+            border-radius: 6px;
+            margin-bottom: 2px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg);
+            color: var(--primary);
+        }
+
+        .main-content {
+            margin-left: 280px;
+            padding: 40px;
+        }
+
+        .section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .section h2 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--primary);
+            color: var(--primary);
+        }
+
+        .endpoint {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            background: var(--bg);
+            cursor: pointer;
+            gap: 15px;
+        }
+
+        .endpoint-header:hover {
+            background: #eee;
+        }
+
+        .method {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .method-get { background: #e6f7ff; color: #1890ff; }
+        .method-post { background: #f6ffed; color: #52c41a; }
+        .method-put { background: #fff7e6; color: #fa8c16; }
+        .method-delete { background: #fff1f0; color: #ff4d4f; }
+
+        .endpoint-path {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+
+        .endpoint-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+
+        .endpoint-body {
+            display: none;
+            padding: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .endpoint.open .endpoint-body {
+            display: block;
+        }
+
+        .endpoint-body h4 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin: 15px 0 10px 0;
+            letter-spacing: 0.5px;
+        }
+
+        .endpoint-body h4:first-child {
+            margin-top: 0;
+        }
+
+        pre {
+            background: var(--code-bg);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .param-table th,
+        .param-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .param-table th {
+            background: var(--bg);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .param-name {
+            font-family: monospace;
+            color: var(--primary);
+        }
+
+        .param-required {
+            color: var(--error);
+            font-size: 0.75rem;
+        }
+
+        .param-type {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .status-codes {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .status-code {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-2xx { background: #f6ffed; color: #52c41a; }
+        .status-4xx { background: #fff7e6; color: #fa8c16; }
+        .status-5xx { background: #fff1f0; color: #ff4d4f; }
+
+        .info-box {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            border-radius: 6px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h4 {
+            color: #1890ff;
+            margin-bottom: 5px;
+        }
+
+        .toggle-icon {
+            margin-left: auto;
+            transition: transform 0.2s;
+        }
+
+        .endpoint.open .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        @media (max-width: 900px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>Domistra API</h2>
+        </div>
+        <div class="nav-section">
+            <h3>Overview</h3>
+            <a href="#overview" class="nav-link">Introduction</a>
+            <a href="#authentication" class="nav-link">Authentication</a>
+        </div>
+        <div class="nav-section">
+            <h3>Endpoints</h3>
+            <a href="#auth" class="nav-link">Auth</a>
+            <a href="#tenants" class="nav-link">Tenants</a>
+            <a href="#invoices" class="nav-link">Invoices</a>
+            <a href="#received-invoices" class="nav-link">Received Invoices</a>
+            <a href="#meter-readings" class="nav-link">Meter Readings</a>
+            <a href="#utility-calculations" class="nav-link">Utility Calculations</a>
+            <a href="#meters" class="nav-link">Meters</a>
+            <a href="#utility-providers" class="nav-link">Utility Providers</a>
+            <a href="#company" class="nav-link">Company</a>
+            <a href="#profile" class="nav-link">Profile</a>
+            <a href="#dashboard" class="nav-link">Dashboard</a>
+            <a href="#exchange-rates" class="nav-link">Exchange Rates</a>
+            <a href="#activity-logs" class="nav-link">Activity Logs</a>
+            <a href="#notifications" class="nav-link">Notifications</a>
+            <a href="#templates" class="nav-link">Templates</a>
+            <a href="#google-drive" class="nav-link">Google Drive</a>
+            <a href="#search" class="nav-link">Search</a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="header" style="margin: -40px -40px 40px -40px; border-radius: 0;">
+            <h1>Domistra API Documentation</h1>
+            <p>Property Management System REST API</p>
+        </div>
+
+        <!-- Overview -->
+        <section id="overview" class="section">
+            <h2>Overview</h2>
+            <div class="info-box">
+                <h4>Base URL</h4>
+                <code>/api</code>
+            </div>
+            <p>The Domistra API is a RESTful API that allows you to manage properties, tenants, invoices, and utilities.</p>
+
+            <h4 style="margin-top: 20px;">Response Format</h4>
+            <p>All responses follow this format:</p>
+            <pre><code>{
+  "success": true,
+  "data": { /* response data */ }
+}
+
+// Error response
+{
+  "success": false,
+  "error": "Error message",
+  "code": "ERROR_CODE"
+}</code></pre>
+
+            <h4 style="margin-top: 20px;">HTTP Status Codes</h4>
+            <div class="status-codes">
+                <span class="status-code status-2xx">200 Success</span>
+                <span class="status-code status-4xx">400 Bad Request</span>
+                <span class="status-code status-4xx">401 Unauthorized</span>
+                <span class="status-code status-4xx">403 Forbidden</span>
+                <span class="status-code status-4xx">404 Not Found</span>
+                <span class="status-code status-4xx">409 Conflict</span>
+                <span class="status-code status-4xx">429 Rate Limited</span>
+                <span class="status-code status-5xx">500 Server Error</span>
+            </div>
+        </section>
+
+        <!-- Authentication -->
+        <section id="authentication" class="section">
+            <h2>Authentication</h2>
+            <div class="info-box">
+                <h4>JWT Token</h4>
+                <p>Authentication uses JWT tokens stored in HttpOnly cookies. The token is automatically sent with each request.</p>
+            </div>
+            <div class="info-box" style="background: #fff7e6; border-color: #ffd591;">
+                <h4 style="color: #fa8c16;">CSRF Protection</h4>
+                <p>All state-changing requests (POST, PUT, DELETE) require the <code>X-CSRF-Token</code> header.</p>
+            </div>
+        </section>
+
+        <!-- Auth Endpoints -->
+        <section id="auth" class="section">
+            <h2>Auth</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/auth/login</span>
+                    <span class="endpoint-desc">Login and get token</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "username": "string",
+  "password": "string"
+}</code></pre>
+                    <h4>Response</h4>
+                    <pre><code>{
+  "success": true,
+  "data": {
+    "csrf_token": "string",
+    "user": { "id": 1, "username": "admin", "full_name": "Admin User" }
+  }
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/auth/logout</span>
+                    <span class="endpoint-desc">Logout and clear session</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Clears the authentication cookie.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/auth/me</span>
+                    <span class="endpoint-desc">Get current user</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Response</h4>
+                    <pre><code>{
+  "success": true,
+  "data": {
+    "user": { "id": 1, "username": "admin", "full_name": "Admin" },
+    "csrf_token": "fresh_token"
+  }
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/auth/change-password</span>
+                    <span class="endpoint-desc">Change user password</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "current_password": "string",
+  "new_password": "string"
+}</code></pre>
+                    <p><strong>Password Requirements:</strong> 8+ characters, uppercase, lowercase, digit</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tenants -->
+        <section id="tenants" class="section">
+            <h2>Tenants</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/tenants</span>
+                    <span class="endpoint-desc">List all tenants</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">is_active</td><td class="param-type">boolean</td><td>Filter by active status</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/tenants/:id</span>
+                    <span class="endpoint-desc">Get single tenant</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns tenant with utility percentages.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/tenants</span>
+                    <span class="endpoint-desc">Create tenant</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">name <span class="param-required">*</span></td><td class="param-type">string</td><td>Tenant name</td></tr>
+                        <tr><td class="param-name">address <span class="param-required">*</span></td><td class="param-type">string</td><td>Address</td></tr>
+                        <tr><td class="param-name">city <span class="param-required">*</span></td><td class="param-type">string</td><td>City</td></tr>
+                        <tr><td class="param-name">county <span class="param-required">*</span></td><td class="param-type">string</td><td>County</td></tr>
+                        <tr><td class="param-name">email</td><td class="param-type">string</td><td>Email address</td></tr>
+                        <tr><td class="param-name">phone</td><td class="param-type">string</td><td>Phone number</td></tr>
+                        <tr><td class="param-name">rent_amount_eur</td><td class="param-type">number</td><td>Monthly rent (EUR)</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-put">PUT</span>
+                    <span class="endpoint-path">/api/tenants/:id</span>
+                    <span class="endpoint-desc">Update tenant</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Same fields as create, all optional.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-delete">DELETE</span>
+                    <span class="endpoint-path">/api/tenants/:id</span>
+                    <span class="endpoint-desc">Deactivate tenant</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Soft delete - sets is_active to false.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-put">PUT</span>
+                    <span class="endpoint-path">/api/tenants/:id/percentages</span>
+                    <span class="endpoint-desc">Update utility percentages</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "percentages": {
+    "electricity": 25.5,
+    "gas": 30,
+    "water": 20
+  }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Invoices -->
+        <section id="invoices" class="section">
+            <h2>Invoices (Issued)</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/invoices</span>
+                    <span class="endpoint-desc">List all invoices</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">tenant_id</td><td class="param-type">number</td><td>Filter by tenant</td></tr>
+                        <tr><td class="param-name">type</td><td class="param-type">string</td><td>rent, utility, generic</td></tr>
+                        <tr><td class="param-name">paid</td><td class="param-type">boolean</td><td>Filter by paid status</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/invoices/next-number</span>
+                    <span class="endpoint-desc">Get next invoice number</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns the next available invoice number based on prefix and sequence.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/invoices/rent</span>
+                    <span class="endpoint-desc">Create rent invoice</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "tenant_id": 1,
+  "invoice_date": "2025-01-15",
+  "due_date": "2025-01-31",
+  "period_month": 1,
+  "period_year": 2025,
+  "exchange_rate": 4.97,
+  "additional_items": [
+    { "description": "Parking", "unit_price": 50 }
+  ]
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/invoices/utility</span>
+                    <span class="endpoint-desc">Create utility invoice</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "tenant_id": 1,
+  "calculation_id": 5
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/invoices/generic</span>
+                    <span class="endpoint-desc">Create generic invoice</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "client_name": "ABC Company",
+  "invoice_date": "2025-01-15",
+  "due_date": "2025-01-31",
+  "items": [
+    {
+      "description": "Service",
+      "quantity": 1,
+      "unit_price": 500,
+      "vat_rate": 19
+    }
+  ]
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/invoices/:id/pdf</span>
+                    <span class="endpoint-desc">Download PDF</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns PDF file download.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/invoices/:id/mark-paid</span>
+                    <span class="endpoint-desc">Mark as paid</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "paid_date": "2025-01-20"  // optional, defaults to today
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-delete">DELETE</span>
+                    <span class="endpoint-path">/api/invoices/:id</span>
+                    <span class="endpoint-desc">Delete invoice</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Only unpaid invoices can be deleted.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Received Invoices -->
+        <section id="received-invoices" class="section">
+            <h2>Received Invoices</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/received-invoices</span>
+                    <span class="endpoint-desc">List all</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">provider_id</td><td class="param-type">number</td><td>Filter by provider</td></tr>
+                        <tr><td class="param-name">type</td><td class="param-type">string</td><td>Utility type</td></tr>
+                        <tr><td class="param-name">paid</td><td class="param-type">boolean</td><td>Filter by paid status</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/received-invoices/period/:year/:month</span>
+                    <span class="endpoint-desc">Get by period</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Get invoices overlapping with a specific month.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/received-invoices</span>
+                    <span class="endpoint-desc">Create</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "provider_id": 1,
+  "invoice_number": "F-12345",
+  "invoice_date": "2025-01-10",
+  "due_date": "2025-01-25",
+  "amount": 450.50,
+  "utility_type": "electricity",
+  "period_start": "2024-12-01",
+  "period_end": "2024-12-31"
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/received-invoices/:id/mark-paid</span>
+                    <span class="endpoint-desc">Mark paid with date</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <pre><code>{ "paid_date": "2025-01-20" }</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Meter Readings -->
+        <section id="meter-readings" class="section">
+            <h2>Meter Readings</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/meter-readings</span>
+                    <span class="endpoint-desc">List all</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">meter_id</td><td class="param-type">number</td><td>Filter by meter</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/meter-readings/period/:year/:month</span>
+                    <span class="endpoint-desc">Get by period</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Get all meter readings for a specific month.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/meter-readings</span>
+                    <span class="endpoint-desc">Create reading</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "meter_id": 1,
+  "reading_date": "2025-01-15",
+  "reading_value": 12500,
+  "period_month": 1,
+  "period_year": 2025
+}</code></pre>
+                    <p>Consumption is calculated automatically from previous reading.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/meter-readings/batch</span>
+                    <span class="endpoint-desc">Create multiple</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "readings": [
+    { "meter_id": 1, "reading_date": "2025-01-15", "reading_value": 12500, "period_month": 1, "period_year": 2025 },
+    { "meter_id": 2, "reading_date": "2025-01-15", "reading_value": 8750, "period_month": 1, "period_year": 2025 }
+  ]
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Utility Calculations -->
+        <section id="utility-calculations" class="section">
+            <h2>Utility Calculations</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/utility-calculations</span>
+                    <span class="endpoint-desc">List all</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns all utility calculations with invoice count.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/utility-calculations/preview/:year/:month</span>
+                    <span class="endpoint-desc">Preview calculation</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Preview utility shares without saving. Includes meter difference data.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/utility-calculations</span>
+                    <span class="endpoint-desc">Create/save calculation</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Request Body</h4>
+                    <pre><code>{
+  "period_year": 2025,
+  "period_month": 1,
+  "overrides": {
+    "1": { "electricity": 25, "gas": 30 },
+    "2": { "electricity": 75, "gas": 70 }
+  }
+}</code></pre>
+                    <p>Overrides are keyed by tenant_id with utility percentages.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/utility-calculations/:id/finalize</span>
+                    <span class="endpoint-desc">Finalize calculation</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Locks the calculation. Cannot be modified after finalization.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Meters -->
+        <section id="meters" class="section">
+            <h2>Meters</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/meters</span>
+                    <span class="endpoint-desc">List active meters</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns all active meters with tenant names.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/meters</span>
+                    <span class="endpoint-desc">Create meter</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <pre><code>{
+  "name": "Meter 1",
+  "tenant_id": 1,
+  "is_general": false
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Utility Providers -->
+        <section id="utility-providers" class="section">
+            <h2>Utility Providers</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/utility-providers</span>
+                    <span class="endpoint-desc">List all</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">type</td><td class="param-type">string</td><td>electricity, gas, water, salubrity, internet, other</td></tr>
+                        <tr><td class="param-name">active</td><td class="param-type">boolean</td><td>Filter by active status</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/utility-providers</span>
+                    <span class="endpoint-desc">Create provider</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <pre><code>{
+  "name": "ENEL",
+  "type": "electricity",
+  "account_number": "123456789"
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Company -->
+        <section id="company" class="section">
+            <h2>Company</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/company</span>
+                    <span class="endpoint-desc">Get company info</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns company details including balance.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-put">PUT</span>
+                    <span class="endpoint-path">/api/company</span>
+                    <span class="endpoint-desc">Update company</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <pre><code>{
+  "name": "My Company SRL",
+  "cui_cif": "RO12345678",
+  "address": "Str. Example 123",
+  "city": "Bucharest",
+  "county": "Sector 1",
+  "iban": "RO49AAAA1B31007593840000"
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Profile -->
+        <section id="profile" class="section">
+            <h2>Profile</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/profile</span>
+                    <span class="endpoint-desc">Get profile</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns user profile with company data.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-put">PUT</span>
+                    <span class="endpoint-path">/api/profile</span>
+                    <span class="endpoint-desc">Update profile</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <pre><code>{
+  "user": {
+    "full_name": "John Doe",
+    "email": "john@example.com"
+  },
+  "company": {
+    "invoice_prefix": "INV"
+  }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard -->
+        <section id="dashboard" class="section">
+            <h2>Dashboard</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/dashboard/summary</span>
+                    <span class="endpoint-desc">Get summary stats</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns key metrics: total revenue, pending invoices, active tenants, etc.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/dashboard/charts/revenue</span>
+                    <span class="endpoint-desc">Revenue chart data</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Query: <code>?months=12</code></p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/dashboard/charts/cash-flow</span>
+                    <span class="endpoint-desc">Cash flow chart</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Query: <code>?months=12</code></p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/dashboard/overdue-invoices</span>
+                    <span class="endpoint-desc">Overdue invoices</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>List of all overdue invoices.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/dashboard/reports/tenant-statement/:tenant_id</span>
+                    <span class="endpoint-desc">Tenant statement</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Query: <code>?start_date=2025-01-01&end_date=2025-12-31</code></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Exchange Rates -->
+        <section id="exchange-rates" class="section">
+            <h2>Exchange Rates</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/exchange-rates/current</span>
+                    <span class="endpoint-desc">Current EUR/RON rate</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Fetches current rate from BNR (National Bank of Romania).</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/exchange-rates/:date</span>
+                    <span class="endpoint-desc">Rate for date</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Date format: YYYY-MM-DD. Falls back to previous day if not available.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Activity Logs -->
+        <section id="activity-logs" class="section">
+            <h2>Activity Logs</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/activity-logs</span>
+                    <span class="endpoint-desc">List logs</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">limit</td><td class="param-type">number</td><td>Default: 50</td></tr>
+                        <tr><td class="param-name">offset</td><td class="param-type">number</td><td>Pagination offset</td></tr>
+                        <tr><td class="param-name">entity_type</td><td class="param-type">string</td><td>Filter by entity</td></tr>
+                        <tr><td class="param-name">action_type</td><td class="param-type">string</td><td>create, update, delete, payment</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/activity-logs/recent</span>
+                    <span class="endpoint-desc">Recent activity</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Query: <code>?limit=10</code></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Notifications -->
+        <section id="notifications" class="section">
+            <h2>Notifications</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/notifications</span>
+                    <span class="endpoint-desc">List notifications</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">include_read</td><td class="param-type">boolean</td><td>Include read notifications</td></tr>
+                        <tr><td class="param-name">limit</td><td class="param-type">number</td><td>Default: 20</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/notifications/count</span>
+                    <span class="endpoint-desc">Unread count</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns count of unread notifications.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/notifications/check</span>
+                    <span class="endpoint-desc">Check for new</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Creates notifications for due/overdue invoices.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-put">PUT</span>
+                    <span class="endpoint-path">/api/notifications/read-all</span>
+                    <span class="endpoint-desc">Mark all read</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Marks all notifications as read.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Templates -->
+        <section id="templates" class="section">
+            <h2>Invoice Templates</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/templates</span>
+                    <span class="endpoint-desc">List templates</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns all invoice templates.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/templates/:id/set-default</span>
+                    <span class="endpoint-desc">Set default</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Sets the template as the default for new invoices.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Google Drive -->
+        <section id="google-drive" class="section">
+            <h2>Google Drive Backup</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/google/auth-url</span>
+                    <span class="endpoint-desc">Get OAuth URL</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns URL to redirect user for Google authorization.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/google/status</span>
+                    <span class="endpoint-desc">Connection status</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns whether Google Drive is connected and account info.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/google/backup</span>
+                    <span class="endpoint-desc">Create backup</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Creates database backup and uploads to Google Drive.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/api/google/restore/:id</span>
+                    <span class="endpoint-desc">Restore backup</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Downloads and restores database from backup.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search -->
+        <section id="search" class="section">
+            <h2>Search</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/api/search</span>
+                    <span class="endpoint-desc">Global search</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="endpoint-body">
+                    <h4>Query Parameters</h4>
+                    <table class="param-table">
+                        <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+                        <tr><td class="param-name">q <span class="param-required">*</span></td><td class="param-type">string</td><td>Search query (min 2 chars)</td></tr>
+                    </table>
+                    <h4>Response</h4>
+                    <pre><code>{
+  "success": true,
+  "data": {
+    "tenants": [...],
+    "invoices": [...],
+    "providers": [...],
+    "total_count": 15
+  }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        function toggleEndpoint(header) {
+            const endpoint = header.parentElement;
+            endpoint.classList.toggle('open');
+        }
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.querySelector(link.getAttribute('href'));
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    </script>
+</body>
+</html>
