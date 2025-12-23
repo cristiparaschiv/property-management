@@ -36,7 +36,7 @@ import {
   LineChart,
 } from 'recharts';
 import { dashboardService } from '../services/dashboardService';
-import { formatCurrency, formatDate, getMonthName } from '../utils/formatters';
+import { formatCurrency, formatEuro, formatDate, getMonthName } from '../utils/formatters';
 import { getUtilityTypeLabel } from '../constants/utilityTypes';
 import { useTheme } from '../contexts/ThemeContext';
 import StatCard from '../components/ui/StatCard';
@@ -453,7 +453,7 @@ const Dashboard = () => {
           value={parseFloat(summary.total_expected_rent || 0)}
           icon={<DollarOutlined />}
           variant="info"
-          formatter={(val) => formatCurrency(val)}
+          formatter={(val) => formatEuro(val)}
           decimals={2}
         />
       </div>
