@@ -61,6 +61,8 @@ const Home = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -70,14 +72,22 @@ const Home = () => {
             style={{ height: 50 }}
           />
         </div>
-        <Button
-          type="primary"
-          icon={<LoginOutlined />}
-          size="large"
-          onClick={() => navigate('/login')}
-        >
-          Autentificare
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <a href="/privacy-policy" style={{ color: '#94a3b8', textDecoration: 'none' }}>
+            Privacy Policy
+          </a>
+          <a href="/terms-of-service" style={{ color: '#94a3b8', textDecoration: 'none' }}>
+            Terms of Service
+          </a>
+          <Button
+            type="primary"
+            icon={<LoginOutlined />}
+            size="large"
+            onClick={() => navigate('/login')}
+          >
+            Autentificare
+          </Button>
+        </div>
       </div>
 
       {/* Hero Section */}

@@ -1,13 +1,41 @@
 <!doctype html>
-<html lang="en">
+<html lang="ro">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/assets/domistra-2-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Domistra</title>
+    <meta name="description" content="Domistra - Sistem de Management al Proprietăților. Gestionați chiriașii, facturile, utilitățile și backup-urile într-un singur loc." />
+    <title>Domistra - Sistem de Management Proprietăți</title>
   </head>
   <body>
+    <!-- Static content for validators/crawlers - hidden once React loads -->
+    <div id="static-content" style="padding: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #10b981 100%); min-height: 100vh; color: white;">
+      <h1 style="font-size: 48px; margin-bottom: 16px;">Domistra</h1>
+      <h2 style="font-weight: 400; color: #e2e8f0;">Sistem de Management al Proprietăților</h2>
+      <p style="color: #94a3b8; max-width: 600px; margin: 24px auto;">
+        Soluția completă pentru administrarea proprietăților imobiliare.
+        Gestionați chiriașii, facturile, utilitățile și backup-urile într-un singur loc.
+      </p>
+      <p style="margin-top: 40px;">
+        <a href="/login" style="background: #10b981; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-size: 16px;">Autentificare</a>
+      </p>
+      <p style="margin-top: 60px; color: #94a3b8;">
+        <a href="/privacy-policy" style="color: #94a3b8; margin-right: 16px;">Privacy Policy</a> |
+        <a href="/terms-of-service" style="color: #94a3b8; margin-left: 16px;">Terms of Service</a>
+      </p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Hide static content once React app loads
+      if (document.getElementById('root')) {
+        var checkReact = setInterval(function() {
+          if (document.getElementById('root').children.length > 0) {
+            document.getElementById('static-content').style.display = 'none';
+            clearInterval(checkReact);
+          }
+        }, 100);
+      }
+    </script>
   </body>
 </html>
