@@ -90,7 +90,9 @@ sub get_auth_url {
     die "Google client_id not configured" unless $google->{client_id};
     die "Google redirect_uri not configured" unless $google->{redirect_uri};
 
-    my $scope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+    # Using 'drive' scope for full access to create folders and upload files
+    # 'drive.file' was too restrictive and caused "insufficient scopes" errors
+    my $scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
 
     my $params = {
         client_id     => $google->{client_id},
