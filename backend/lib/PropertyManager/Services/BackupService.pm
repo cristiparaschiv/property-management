@@ -303,6 +303,44 @@ sub cleanup_temp_files {
     }
 }
 
+=head2 cleanup_stuck_backups
+
+Mark backups that are stuck in 'creating' or 'uploading' status as failed.
+This handles cases where a backup process was interrupted (e.g., server restart,
+token expiration, etc.)
+
+=cut
+
+sub cleanup_stuck_backups {
+    my ($self, %args) = @_;
+
+    my $timeout_minutes = $args{timeout_minutes} || 30;  # Default 30 minutes
+
+    # Calculate cutoff time
+    my $cutoff = DateTime->now->subtract(minutes => $timeout_minutes);
+
+    # Find stuck backups
+    my @stuck = $self->{schema}->resultset('BackupHistory')->search({
+        status => { -in => ['creating', 'uploading'] },
+        started_at => { '<' => $cutoff->datetime(' ') },
+    })->all;
+
+    my @cleaned;
+    foreach my $record (@stuck) {
+        $record->update({
+            status => 'failed',
+            error_message => 'Backup process timed out or was interrupted',
+            completed_at => DateTime->now,
+        });
+        push @cleaned, $record->id;
+    }
+
+    return {
+        cleaned_count => scalar(@cleaned),
+        backup_ids    => \@cleaned,
+    };
+}
+
 1;
 
 __END__

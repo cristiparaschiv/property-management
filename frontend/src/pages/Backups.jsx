@@ -146,6 +146,7 @@ const Backups = () => {
   const status = statusData?.data?.data;
   const backups = backupsData?.data?.data || [];
   const isConnected = status?.connected;
+  const needsReconnect = status?.needs_reconnect;
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '-';
@@ -316,6 +317,51 @@ const Backups = () => {
                 </Button>
               </Popconfirm>
             </div>
+          </div>
+        ) : needsReconnect ? (
+          <div>
+            <Alert
+              message="Sesiunea Google Drive a expirat"
+              description={
+                <div>
+                  <p>Conexiunea la Google Drive pentru contul <strong>{status?.email}</strong> a expirat și trebuie reautorizată.</p>
+                  <p style={{ marginBottom: 0 }}>Acest lucru se poate întâmpla dacă:</p>
+                  <ul style={{ marginBottom: 0 }}>
+                    <li>Au trecut mai mult de 7 zile de la ultima autorizare (aplicația este în modul Testing)</li>
+                    <li>Ați revocat accesul din setările contului Google</li>
+                    <li>Credențialele aplicației s-au modificat</li>
+                  </ul>
+                </div>
+              }
+              type="warning"
+              showIcon
+              icon={<WarningOutlined />}
+              style={{ marginBottom: 16 }}
+            />
+            <Space>
+              <Button
+                type="primary"
+                icon={<LinkOutlined />}
+                onClick={() => getAuthUrlMutation.mutate()}
+                loading={getAuthUrlMutation.isPending}
+              >
+                Reconectare la Google Drive
+              </Button>
+              <Popconfirm
+                title="Deconectare completă"
+                description="Sigur doriți să vă deconectați complet? Va trebui să vă reconectați pentru a face backup-uri."
+                onConfirm={() => disconnectMutation.mutate()}
+                okText="Da, deconectează"
+                cancelText="Anulează"
+              >
+                <Button
+                  icon={<DisconnectOutlined />}
+                  loading={disconnectMutation.isPending}
+                >
+                  Deconectare completă
+                </Button>
+              </Popconfirm>
+            </Space>
           </div>
         ) : (
           <div>

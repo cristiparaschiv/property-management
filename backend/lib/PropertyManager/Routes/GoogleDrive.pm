@@ -252,6 +252,9 @@ get '/backups' => sub {
     my $limit = query_parameters->get('limit') || 20;
     my $offset = query_parameters->get('offset') || 0;
 
+    # Cleanup any stuck backups before listing
+    $backup_service->cleanup_stuck_backups(timeout_minutes => 30);
+
     my $records = $backup_service->get_backup_history(
         limit  => $limit,
         offset => $offset,

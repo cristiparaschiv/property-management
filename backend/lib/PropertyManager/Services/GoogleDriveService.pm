@@ -213,11 +213,18 @@ sub get_status {
 
     my $config = $self->_get_config();
 
+    # Determine if we need reconnection (had a connection but token was invalidated)
+    my $needs_reconnect = 0;
+    if (!$config->access_token && $config->connected_email) {
+        $needs_reconnect = 1;
+    }
+
     return {
-        connected       => $config->is_connected ? 1 : 0,
-        email           => $config->connected_email,
-        folder_name     => $config->folder_name,
-        connected_at    => $config->connected_at ? $config->connected_at . '' : undef,
+        connected        => $config->is_connected ? 1 : 0,
+        needs_reconnect  => $needs_reconnect,
+        email            => $config->connected_email,
+        folder_name      => $config->folder_name,
+        connected_at     => $config->connected_at ? $config->connected_at . '' : undef,
     };
 }
 
@@ -284,7 +291,21 @@ sub _refresh_token_if_needed {
 
     unless ($response->is_success) {
         my $error = try { decode_json($response->content) } || {};
-        die "Failed to refresh token: " . ($error->{error_description} || $response->status_line);
+        my $error_code = $error->{error} || '';
+        my $error_desc = $error->{error_description} || $response->status_line;
+
+        # Check if token is expired or revoked - mark connection as invalid
+        if ($error_code eq 'invalid_grant' || $error_desc =~ /expired|revoked/i) {
+            # Mark connection as needing re-authentication
+            $config->update({
+                access_token => undef,
+                token_expiry => undef,
+                # Keep refresh_token and other info for diagnostic purposes
+            });
+            die "Google Drive session expired. Please reconnect to Google Drive.";
+        }
+
+        die "Failed to refresh token: $error_desc";
     }
 
     my $data = decode_json($response->content);
@@ -292,11 +313,18 @@ sub _refresh_token_if_needed {
     # Calculate new expiry
     my $new_expiry = DateTime->now->add(seconds => $data->{expires_in} || 3600);
 
-    # Update tokens
-    $config->update({
+    # Update tokens - also update refresh_token if Google provided a new one
+    my $update_data = {
         access_token => $data->{access_token},
         token_expiry => $new_expiry->datetime(' '),
-    });
+    };
+
+    # Google may provide a new refresh token (rotation)
+    if ($data->{refresh_token}) {
+        $update_data->{refresh_token} = $data->{refresh_token};
+    }
+
+    $config->update($update_data);
 
     return $data->{access_token};
 }
