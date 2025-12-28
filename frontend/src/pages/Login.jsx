@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, message, Alert } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { authService } from '../services/authService';
 import useAuthStore from '../stores/authStore';
@@ -167,6 +167,16 @@ const Login = () => {
             </Button>
           </Form.Item>
         </Form>
+
+        <div style={{ textAlign: 'center', marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+          <Link to="/privacy-policy" style={{ color: '#888', fontSize: 12 }}>
+            Politica de Confidențialitate
+          </Link>
+          <span style={{ color: '#d9d9d9', margin: '0 8px' }}>|</span>
+          <Link to="/terms-of-service" style={{ color: '#888', fontSize: 12 }}>
+            Termeni și Condiții
+          </Link>
+        </div>
       </Card>
     </div>
   );

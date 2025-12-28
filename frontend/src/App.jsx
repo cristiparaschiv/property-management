@@ -8,6 +8,8 @@ import { createTheme } from './styles/theme/antdTheme';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import CompanySettings from './pages/CompanySettings';
@@ -44,6 +46,8 @@ function AppContent() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route
             path="/"
             element={
