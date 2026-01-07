@@ -90,9 +90,9 @@ sub get_auth_url {
     die "Google client_id not configured" unless $google->{client_id};
     die "Google redirect_uri not configured" unless $google->{redirect_uri};
 
-    # Using 'drive' scope for full access to create folders and upload files
-    # 'drive.file' was too restrictive and caused "insufficient scopes" errors
-    my $scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
+    # Using 'drive.file' scope - allows creating/accessing only files created by this app
+    # Less sensitive than full 'drive' scope, easier Google verification
+    my $scope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
 
     my $params = {
         client_id     => $google->{client_id},
@@ -385,7 +385,12 @@ sub _ensure_backup_folder {
     my $create_response = $self->{ua}->request($create_request);
 
     unless ($create_response->is_success) {
-        die "Failed to create backup folder: " . $create_response->status_line;
+        my $error_body = $create_response->content || 'No response body';
+        my $error_detail = try {
+            my $err = decode_json($error_body);
+            $err->{error}{message} || $error_body;
+        } || $error_body;
+        die "Failed to create backup folder: " . $create_response->status_line . " - $error_detail";
     }
 
     my $folder_data = decode_json($create_response->content);
