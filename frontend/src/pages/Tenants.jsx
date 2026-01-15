@@ -119,7 +119,11 @@ const Tenants = () => {
 
   const showEditModal = (tenant) => {
     setEditingTenant(tenant);
-    form.setFieldsValue(tenant);
+    // Convert rent_amount_eur to number for proper form validation
+    form.setFieldsValue({
+      ...tenant,
+      rent_amount_eur: tenant.rent_amount_eur != null ? Number(tenant.rent_amount_eur) : null,
+    });
     setIsModalOpen(true);
   };
 
@@ -352,6 +356,18 @@ const Tenants = () => {
             hasFeedback
           >
             <Input prefix={<UserOutlined style={{ color: 'rgba(0,0,0,.25)' }} />} placeholder="ex: Ion Popescu" />
+          </Form.Item>
+
+          <Form.Item
+            label="CUI / CNP"
+            name="cui_cnp"
+            tooltip="Cod Unic de Înregistrare (pentru firme) sau Cod Numeric Personal (pentru persoane fizice)"
+            rules={[
+              { pattern: /^[0-9A-Za-z]+$/, message: 'CUI/CNP poate conține doar cifre și litere' }
+            ]}
+            hasFeedback
+          >
+            <Input placeholder="ex: RO12345678 sau 1234567890123" />
           </Form.Item>
 
           <Form.Item
