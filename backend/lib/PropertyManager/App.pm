@@ -91,6 +91,7 @@ use PropertyManager::Routes::UtilityProviders;
 use PropertyManager::Routes::ReceivedInvoices;
 use PropertyManager::Routes::Meters;
 use PropertyManager::Routes::MeterReadings;
+use PropertyManager::Routes::GasReadings;
 use PropertyManager::Routes::UtilityCalculations;
 use PropertyManager::Routes::Invoices;
 use PropertyManager::Routes::Templates;
