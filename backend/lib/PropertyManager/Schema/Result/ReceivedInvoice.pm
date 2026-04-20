@@ -93,4 +93,9 @@ __PACKAGE__->has_many(
     'received_invoice_id'
 );
 
+__PACKAGE__->has_many(
+    metered_inputs => 'PropertyManager::Schema::Result::MeteredCalculationInput',
+    'received_invoice_id'
+);
+
 1;

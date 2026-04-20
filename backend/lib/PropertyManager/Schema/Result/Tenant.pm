@@ -122,4 +122,14 @@ __PACKAGE__->has_many(
     'tenant_id'
 );
 
+__PACKAGE__->has_many(
+    gas_readings => 'PropertyManager::Schema::Result::GasReading',
+    'tenant_id'
+);
+
+__PACKAGE__->has_many(
+    water_readings => 'PropertyManager::Schema::Result::WaterReading',
+    'tenant_id'
+);
+
 1;

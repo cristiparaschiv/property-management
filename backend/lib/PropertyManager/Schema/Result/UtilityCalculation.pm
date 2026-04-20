@@ -66,4 +66,9 @@ __PACKAGE__->has_many(
     'calculation_id'
 );
 
+__PACKAGE__->has_many(
+    metered_inputs => 'PropertyManager::Schema::Result::MeteredCalculationInput',
+    'calculation_id'
+);
+
 1;

@@ -35,6 +35,11 @@ __PACKAGE__->add_columns(
         is_nullable => 0,
         default_value => 0,
     },
+    uses_meter => {
+        data_type => 'boolean',
+        is_nullable => 0,
+        default_value => 0,
+    },
     created_at => {
         data_type => 'timestamp',
         is_nullable => 0,
