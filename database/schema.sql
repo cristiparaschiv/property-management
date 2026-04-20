@@ -100,6 +100,7 @@ CREATE TABLE tenant_utility_percentages (
     tenant_id INT UNSIGNED NOT NULL,
     utility_type ENUM('electricity', 'gas', 'water', 'salubrity', 'internet', 'other') NOT NULL,
     percentage DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT 'Percentage 0.00 to 100.00',
+    uses_meter BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'When TRUE, use meter readings instead of fixed percentage',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -479,6 +480,72 @@ CREATE TABLE login_attempts (
 -- Initialize Google Drive Config (single row)
 -- ============================================================================
 INSERT INTO google_drive_config (id) VALUES (1);
+
+-- ============================================================================
+-- Table: gas_readings
+-- Description: Monthly per-tenant gas meter readings (m³)
+-- ============================================================================
+CREATE TABLE gas_readings (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT UNSIGNED NOT NULL,
+    reading_date DATE NOT NULL,
+    reading_value DECIMAL(12,2) NOT NULL COMMENT 'Gas meter index in m³',
+    previous_reading_value DECIMAL(12,2) NULL,
+    consumption DECIMAL(12,2) NULL COMMENT 'current - previous',
+    period_month TINYINT NOT NULL,
+    period_year SMALLINT NOT NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_tenant_period (tenant_id, period_month, period_year),
+    INDEX idx_tenant_id (tenant_id),
+    INDEX idx_period (period_year, period_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Table: water_readings
+-- Description: Monthly per-tenant water meter readings (m³)
+-- ============================================================================
+CREATE TABLE water_readings (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT UNSIGNED NOT NULL,
+    reading_date DATE NOT NULL,
+    reading_value DECIMAL(12,2) NOT NULL COMMENT 'Water meter index in m³',
+    previous_reading_value DECIMAL(12,2) NULL,
+    consumption DECIMAL(12,2) NULL,
+    period_month TINYINT NOT NULL,
+    period_year SMALLINT NOT NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_tenant_period (tenant_id, period_month, period_year),
+    INDEX idx_tenant_id (tenant_id),
+    INDEX idx_period (period_year, period_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Table: metered_calculation_inputs
+-- Description: Per-calculation metered totals (invoice-level) for gas/water
+-- ============================================================================
+CREATE TABLE metered_calculation_inputs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    calculation_id INT UNSIGNED NOT NULL,
+    received_invoice_id INT UNSIGNED NOT NULL,
+    utility_type ENUM('gas', 'water') NOT NULL,
+    total_units DECIMAL(12,2) NOT NULL,
+    consumption_amount DECIMAL(10,2) NULL COMMENT 'Water only: cost of consumption portion of invoice',
+    rain_amount DECIMAL(10,2) NULL COMMENT 'Water only: cost of rain-water portion of invoice',
+    notes TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (calculation_id) REFERENCES utility_calculations(id) ON DELETE CASCADE,
+    FOREIGN KEY (received_invoice_id) REFERENCES received_invoices(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_calc_utility (calculation_id, utility_type),
+    INDEX idx_calculation_id (calculation_id),
+    INDEX idx_received_invoice_id (received_invoice_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- End of Schema
