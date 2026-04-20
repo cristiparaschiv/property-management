@@ -782,5 +782,35 @@
         </div>
     </div>
     [% END %]
+
+    [% IF metered_breakdown && metered_breakdown.size > 0 %]
+    <div class="metered-breakdown" style="page-break-before: always; padding: 15mm 20mm;">
+        <h3 style="margin-top: 0;">Detalii calcul contori</h3>
+        [% FOREACH item IN metered_breakdown %]
+        <div class="metered-item" style="margin: 12px 0; padding: 10px; border: 1px solid #ddd;">
+            [% IF item.utility_type == 'gas' %]
+            <h4 style="margin: 0 0 8px 0;">Gaz</h4>
+            <p style="margin: 0;">
+                Index anterior: [% item.previous_index %] m³<br>
+                Index curent: [% item.current_index %] m³<br>
+                Consum: [% item.tenant_units %] m³ din total [% item.total_units %] m³ pe factura furnizor<br>
+                Cotă: [% item.ratio_pct %]%<br>
+                Sumă: [% item.ratio_pct %]% × [% item.invoice_amount %] RON = <b>[% item.tenant_amount %] RON</b>
+            </p>
+            [% ELSIF item.utility_type == 'water' %]
+            <h4 style="margin: 0 0 8px 0;">Apă</h4>
+            <p style="margin: 0;">
+                Index anterior: [% item.previous_index %] m³<br>
+                Index curent: [% item.current_index %] m³<br>
+                Consum propriu: [% item.tenant_units %] m³ din total [% item.total_units %] m³<br>
+                Cotă consum: [% item.tenant_units %]/[% item.total_units %] × [% item.consumption_cost %] RON = [% item.consumption_share %] RON<br>
+                Apă pluvială: [% item.rain_percentage %]% × [% item.rain_cost %] RON = [% item.rain_share %] RON<br>
+                Total: <b>[% item.tenant_amount %] RON</b> (cotă efectivă pe factura furnizor: [% item.effective_pct %]%)
+            </p>
+            [% END %]
+        </div>
+        [% END %]
+    </div>
+    [% END %]
 </body>
 </html>
