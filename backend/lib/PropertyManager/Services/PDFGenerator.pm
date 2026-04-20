@@ -615,6 +615,41 @@ Parameters:
 sub generate_invoice_pdf_html {
     my ($self, $invoice_id, %options) = @_;
 
+    my $vars = $self->build_invoice_template_vars($invoice_id, %options);
+
+    # Get template directory (relative to bin/ directory)
+    my $template_dir = $self->{config}{app}{template_dir}
+        || File::Spec->catdir($FindBin::Bin, '..', 'templates', 'pdf');
+
+    # Initialize Template Toolkit
+    my $tt = Template->new({
+        INCLUDE_PATH => $template_dir,
+        ENCODING => 'utf8',
+        ABSOLUTE => 1,
+    }) or die "Template error: " . Template->error();
+
+    # Render HTML
+    my $html;
+    $tt->process('invoice.tt', $vars, \$html)
+        or die "Template processing error: " . $tt->error();
+
+    # Convert HTML to PDF using wkhtmltopdf
+    my $pdf_data = $self->_html_to_pdf($html);
+
+    return $pdf_data;
+}
+
+=head2 build_invoice_template_vars
+
+Build the template variables hashref for a given invoice. Extracted from
+generate_invoice_pdf_html so the assembly (including the metered breakdown
+for gas/water meter-based tenants) is testable without running wkhtmltopdf.
+
+=cut
+
+sub build_invoice_template_vars {
+    my ($self, $invoice_id, %options) = @_;
+
     die "invoice_id is required" unless $invoice_id;
 
     # Load invoice with all relationships
@@ -744,29 +779,109 @@ sub generate_invoice_pdf_html {
             $vars->{utility_details} = \@utility_details;
             $vars->{period_month_name} = $ROMANIAN_MONTHS[$calculation->period_month - 1];
             $vars->{period_year} = $calculation->period_year;
+
+            # Build metered breakdown for gas/water lines where tenant uses meter
+            my @metered_breakdown = $self->_build_metered_breakdown(
+                $invoice, $calculation, \@details, $tenant
+            );
+            $vars->{metered_breakdown} = \@metered_breakdown;
         }
     }
 
-    # Get template directory (relative to bin/ directory)
-    my $template_dir = $self->{config}{app}{template_dir}
-        || File::Spec->catdir($FindBin::Bin, '..', 'templates', 'pdf');
+    $vars->{metered_breakdown} ||= [];
 
-    # Initialize Template Toolkit
-    my $tt = Template->new({
-        INCLUDE_PATH => $template_dir,
-        ENCODING => 'utf8',
-        ABSOLUTE => 1,
-    }) or die "Template error: " . Template->error();
+    return $vars;
+}
 
-    # Render HTML
-    my $html;
-    $tt->process('invoice.tt', $vars, \$html)
-        or die "Template processing error: " . $tt->error();
+=head2 _build_metered_breakdown
 
-    # Convert HTML to PDF using wkhtmltopdf
-    my $pdf_data = $self->_html_to_pdf($html);
+Build per-utility breakdown items for gas/water lines where the tenant
+has uses_meter=1. Returns a list of hashrefs consumed by the invoice
+template's "Detalii calcul contori" section.
 
-    return $pdf_data;
+=cut
+
+sub _build_metered_breakdown {
+    my ($self, $invoice, $calculation, $details, $tenant) = @_;
+
+    my $schema = $self->{schema};
+    my @breakdown;
+
+    foreach my $detail (@$details) {
+        my $utype = $detail->utility_type;
+        next unless $utype eq 'gas' || $utype eq 'water';
+
+        my $tup = $schema->resultset('TenantUtilityPercentage')->search({
+            tenant_id    => $tenant->id,
+            utility_type => $utype,
+        })->first;
+        next unless $tup && $tup->uses_meter;
+
+        my $inputs = $schema->resultset('MeteredCalculationInput')->search({
+            calculation_id => $calculation->id,
+            utility_type   => $utype,
+        })->first;
+        next unless $inputs;
+
+        my $reading_rs = $utype eq 'gas' ? 'GasReading' : 'WaterReading';
+        my $reading = $schema->resultset($reading_rs)->search({
+            tenant_id    => $tenant->id,
+            period_year  => $calculation->period_year,
+            period_month => $calculation->period_month,
+        })->first;
+        next unless $reading;
+
+        my $tenant_units = $reading->consumption;
+        unless (defined $tenant_units) {
+            my $cur  = $reading->reading_value || 0;
+            my $prev = $reading->previous_reading_value || 0;
+            $tenant_units = $cur - $prev;
+        }
+
+        my $total_units = $inputs->total_units || 0;
+        my $ratio_pct = $total_units > 0
+            ? ($tenant_units / $total_units) * 100
+            : 0;
+
+        my $invoice_amount;
+        if ($detail->received_invoice_id) {
+            my $ri = $schema->resultset('ReceivedInvoice')->find($detail->received_invoice_id);
+            $invoice_amount = $ri ? $ri->amount : undef;
+        }
+
+        my $item = {
+            utility_type   => $utype,
+            previous_index => sprintf('%.2f', $reading->previous_reading_value // 0),
+            current_index  => sprintf('%.2f', $reading->reading_value // 0),
+            tenant_units   => sprintf('%.2f', $tenant_units // 0),
+            total_units    => sprintf('%.2f', $total_units),
+            ratio_pct      => sprintf('%.2f', $ratio_pct),
+            invoice_amount => defined $invoice_amount ? sprintf('%.2f', $invoice_amount) : '',
+            tenant_amount  => sprintf('%.2f', $detail->amount),
+            effective_pct  => sprintf('%.2f', $detail->percentage),
+        };
+
+        if ($utype eq 'water') {
+            my $consumption_cost = $inputs->consumption_amount // 0;
+            my $rain_cost        = $inputs->rain_amount // 0;
+            my $rain_pct         = $tup->percentage // 0;
+
+            my $consumption_share = $total_units > 0
+                ? ($tenant_units / $total_units) * $consumption_cost
+                : 0;
+            my $rain_share = ($rain_pct / 100) * $rain_cost;
+
+            $item->{consumption_cost}  = sprintf('%.2f', $consumption_cost);
+            $item->{rain_cost}         = sprintf('%.2f', $rain_cost);
+            $item->{rain_percentage}   = sprintf('%.2f', $rain_pct);
+            $item->{consumption_share} = sprintf('%.2f', $consumption_share);
+            $item->{rain_share}        = sprintf('%.2f', $rain_share);
+        }
+
+        push @breakdown, $item;
+    }
+
+    return @breakdown;
 }
 
 =head2 _html_to_pdf
