@@ -50,6 +50,16 @@ sub calculate_shares {
 
     die "year and month are required" unless defined $year && defined $month;
 
+    # Resolve the calculation_id for this period (needed for metered branch).
+    # Callers may pass it in; otherwise we look it up by period.
+    my $calculation_id = $params{calculation_id};
+    unless ($calculation_id) {
+        my $calc_row = $self->{schema}->resultset('UtilityCalculation')->search(
+            { period_year => $year, period_month => $month }
+        )->first;
+        $calculation_id = $calc_row ? $calc_row->id : undef;
+    }
+
     # Get all received invoices for this period
     my @invoices = $self->get_invoices_for_period($year, $month);
 
@@ -68,45 +78,50 @@ sub calculate_shares {
         my $total_amount = $invoice->amount;
         my $invoice_id = $invoice->id;
 
-        # Get percentages for each tenant
-        my %tenant_percentages;
+        # Resolve each tenant's share (effective percentage + amount).
+        # Metered tenants for gas/water take the meter-based branch; everyone
+        # else gets the legacy fixed-% path.
+        my %tenant_resolved;  # tenant_id => { percentage, amount }
         foreach my $tenant (@tenants) {
             my $tenant_id = $tenant->id;
 
-            # Check for override first
-            my $percentage;
-            if ($overrides->{$tenant_id} && defined $overrides->{$tenant_id}{$utility_type}) {
-                $percentage = $overrides->{$tenant_id}{$utility_type};
+            my $share;
+            if ($overrides->{$tenant_id}
+                && defined $overrides->{$tenant_id}{$utility_type}) {
+                my $p = $overrides->{$tenant_id}{$utility_type};
+                $share = {
+                    percentage => $p,
+                    amount     => ($total_amount * $p) / 100,
+                };
             } else {
-                # Get default percentage from tenant_utility_percentages
-                my $pct_record = $self->{schema}->resultset('TenantUtilityPercentage')->search(
-                    {
-                        tenant_id => $tenant_id,
-                        utility_type => $utility_type,
-                    }
-                )->first;
-
-                $percentage = $pct_record ? $pct_record->percentage : 0;
+                $share = $self->_resolve_tenant_share(
+                    tenant_id      => $tenant_id,
+                    utility_type   => $utility_type,
+                    invoice        => $invoice,
+                    year           => $year,
+                    month          => $month,
+                    calculation_id => $calculation_id,
+                );
             }
 
-            $tenant_percentages{$tenant_id} = $percentage;
+            $tenant_resolved{$tenant_id} = $share;
         }
 
-        # Calculate total percentage allocated to tenants
-        my $total_tenant_pct = sum(values %tenant_percentages) || 0;
+        # Sum effective percentages for company-portion math
+        my $total_tenant_pct = sum(map { $_->{percentage} } values %tenant_resolved) || 0;
 
-        # Company portion percentage (remainder up to 100%)
         my $company_pct = 100 - $total_tenant_pct;
-        $company_pct = 0 if $company_pct < 0;  # Shouldn't happen, but safeguard
+        $company_pct = 0 if $company_pct < 0;
 
-        # Calculate amounts
+        # Emit tenant share records
         my %invoice_tenant_shares;
         foreach my $tenant (@tenants) {
             my $tenant_id = $tenant->id;
-            my $percentage = $tenant_percentages{$tenant_id} || 0;
-            my $amount = ($total_amount * $percentage) / 100;
+            my $share     = $tenant_resolved{$tenant_id};
+            my $amount    = $share->{amount} || 0;
+            my $percentage = $share->{percentage} || 0;
 
-            next if $amount == 0;  # Skip if no allocation
+            next if $amount == 0;
 
             $tenant_shares{$tenant_id}{$utility_type} = {
                 amount => sprintf("%.2f", $amount),
@@ -234,6 +249,87 @@ sub get_invoices_for_period {
     )->all;
 
     return @invoices;
+}
+
+=head2 _resolve_tenant_share
+
+Resolve a (tenant, utility, invoice) share. Returns a hashref:
+  { percentage => <effective % on this invoice>, amount => <RON> }
+
+Non-metered utilities and non-gas/water utilities take the fixed-% path.
+Metered gas/water dispatches on meter readings and metered_calculation_inputs.
+
+=cut
+
+sub _resolve_tenant_share {
+    my ($self, %args) = @_;
+    my ($tenant_id, $utility_type, $invoice, $year, $month, $calculation_id) =
+        @args{qw(tenant_id utility_type invoice year month calculation_id)};
+
+    my $pct_record = $self->{schema}->resultset('TenantUtilityPercentage')->search(
+        { tenant_id => $tenant_id, utility_type => $utility_type }
+    )->first;
+
+    my $fixed_pct  = $pct_record ? $pct_record->percentage : 0;
+    my $uses_meter = $pct_record ? $pct_record->uses_meter  : 0;
+
+    # Non-metered OR metered-but-not-gas/water: fall back to fixed-% behavior.
+    unless ($uses_meter && ($utility_type eq 'gas' || $utility_type eq 'water')) {
+        my $amount = ($invoice->amount * $fixed_pct) / 100;
+        return { percentage => $fixed_pct, amount => $amount };
+    }
+
+    die "calculation_id required for metered billing" unless $calculation_id;
+
+    my $inputs = $self->{schema}->resultset('MeteredCalculationInput')->search({
+        calculation_id => $calculation_id,
+        utility_type   => $utility_type,
+    })->first;
+
+    die "Missing metered inputs for $utility_type in calculation $calculation_id"
+        unless $inputs;
+
+    my $reading_rs = $utility_type eq 'gas' ? 'GasReading' : 'WaterReading';
+    my $reading = $self->{schema}->resultset($reading_rs)->search({
+        tenant_id    => $tenant_id,
+        period_year  => $year,
+        period_month => $month,
+    })->first;
+
+    die "Missing $utility_type reading for tenant $tenant_id / $year-$month"
+        unless $reading;
+
+    my $tenant_units = defined $reading->consumption
+        ? $reading->consumption
+        : ($reading->reading_value - ($reading->previous_reading_value // 0));
+
+    my $total_units = $inputs->total_units;
+    die "total_units must be > 0 for metered $utility_type" unless $total_units > 0;
+
+    if ($utility_type eq 'gas') {
+        my $ratio  = $tenant_units / $total_units;
+        my $amount = $ratio * $invoice->amount;
+        return {
+            percentage => $ratio * 100,
+            amount     => $amount,
+        };
+    }
+
+    # water
+    my $consumption_amount = $inputs->consumption_amount || 0;
+    my $rain_amount        = $inputs->rain_amount || 0;
+
+    my $consumption_share = ($tenant_units / $total_units) * $consumption_amount;
+    my $rain_share        = ($fixed_pct / 100) * $rain_amount;
+    my $amount            = $consumption_share + $rain_share;
+    my $effective_pct     = $invoice->amount > 0
+        ? ($amount / $invoice->amount) * 100
+        : 0;
+
+    return {
+        percentage => $effective_pct,
+        amount     => $amount,
+    };
 }
 
 1;
