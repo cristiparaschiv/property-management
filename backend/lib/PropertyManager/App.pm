@@ -93,6 +93,7 @@ use PropertyManager::Routes::Meters;
 use PropertyManager::Routes::MeterReadings;
 use PropertyManager::Routes::GasReadings;
 use PropertyManager::Routes::WaterReadings;
+use PropertyManager::Routes::MeteredCalculationInputs;
 use PropertyManager::Routes::UtilityCalculations;
 use PropertyManager::Routes::Invoices;
 use PropertyManager::Routes::Templates;
