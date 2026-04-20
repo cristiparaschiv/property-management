@@ -39,6 +39,7 @@ import { receivedInvoicesService } from '../services/receivedInvoicesService';
 import { meterReadingsService } from '../services/meterReadingsService';
 import { tenantsService } from '../services/tenantsService';
 import { invoicesService } from '../services/invoicesService';
+import { meteredInputsService } from '../services/meteredInputsService';
 import { formatCurrency, formatNumber, getMonthName } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
 import {
@@ -246,6 +247,21 @@ const UtilityCalculations = () => {
     return (tenantsData?.data?.tenants || []).filter((t) => t.is_active);
   }, [tenantsData]);
 
+  // Detect metered needs for current period based on tenants' utility_percentages
+  const { needsGas, needsWater } = useMemo(() => {
+    let g = false;
+    let w = false;
+    activeTenants.forEach((tenant) => {
+      (tenant.utility_percentages || []).forEach((up) => {
+        if (up.uses_meter) {
+          if (up.utility_type === 'gas') g = true;
+          if (up.utility_type === 'water') w = true;
+        }
+      });
+    });
+    return { needsGas: g, needsWater: w };
+  }, [activeTenants]);
+
   // Calculate costs per tenant
   const tenantCosts = useMemo(() => {
     const costs = {};
@@ -303,6 +319,101 @@ const UtilityCalculations = () => {
 
   const isPeriodFinalized = existingCalculation?.is_finalized;
   const hasExistingCalculation = !!existingCalculation;
+
+  // Fetch metered inputs for the current calculation
+  const { data: meteredInputsData } = useQuery({
+    queryKey: ['metered-inputs', existingCalculation?.id],
+    queryFn: () => meteredInputsService.getAll({ calculation_id: existingCalculation.id }),
+    enabled: !!existingCalculation?.id && (needsGas || needsWater),
+  });
+
+  const meteredInputs = useMemo(() => {
+    const rows = meteredInputsData?.data || [];
+    const map = { gas: null, water: null };
+    rows.forEach((r) => {
+      if (r.utility_type === 'gas') map.gas = r;
+      if (r.utility_type === 'water') map.water = r;
+    });
+    return map;
+  }, [meteredInputsData]);
+
+  const [gasForm] = Form.useForm();
+  const [waterForm] = Form.useForm();
+
+  useEffect(() => {
+    if (meteredInputs.gas) {
+      gasForm.setFieldsValue({
+        received_invoice_id: meteredInputs.gas.received_invoice_id,
+        total_units: Number(meteredInputs.gas.total_units),
+      });
+    } else {
+      gasForm.resetFields();
+    }
+  }, [meteredInputs.gas, gasForm]);
+
+  useEffect(() => {
+    if (meteredInputs.water) {
+      waterForm.setFieldsValue({
+        received_invoice_id: meteredInputs.water.received_invoice_id,
+        total_units: Number(meteredInputs.water.total_units),
+        consumption_amount: meteredInputs.water.consumption_amount != null ? Number(meteredInputs.water.consumption_amount) : undefined,
+        rain_amount: meteredInputs.water.rain_amount != null ? Number(meteredInputs.water.rain_amount) : undefined,
+      });
+    } else {
+      waterForm.resetFields();
+    }
+  }, [meteredInputs.water, waterForm]);
+
+  const saveMeteredInputMutation = useMutation({
+    mutationFn: (payload) => meteredInputsService.save(payload),
+    onSuccess: () => {
+      message.success('Input contor salvat!');
+      queryClient.invalidateQueries(['metered-inputs', existingCalculation?.id]);
+    },
+    onError: (error) => {
+      message.error(error.response?.data?.error || 'Eroare la salvarea inputului');
+    },
+  });
+
+  const handleSaveGasMeteredInput = async () => {
+    try {
+      const values = await gasForm.validateFields();
+      saveMeteredInputMutation.mutate({
+        calculation_id: existingCalculation.id,
+        utility_type: 'gas',
+        received_invoice_id: values.received_invoice_id,
+        total_units: values.total_units,
+      });
+    } catch (_) { /* validation */ }
+  };
+
+  const handleSaveWaterMeteredInput = async () => {
+    try {
+      const values = await waterForm.validateFields();
+      saveMeteredInputMutation.mutate({
+        calculation_id: existingCalculation.id,
+        utility_type: 'water',
+        received_invoice_id: values.received_invoice_id,
+        total_units: values.total_units,
+        consumption_amount: values.consumption_amount,
+        rain_amount: values.rain_amount,
+      });
+    } catch (_) { /* validation */ }
+  };
+
+  const checkMeteredInputsBeforeFinalize = (calc) => {
+    // Determine metered needs for this calc's period using current tenants state
+    if (!calc) return true;
+    if (needsGas && !meteredInputs.gas) {
+      message.error('Missing gas metered inputs');
+      return false;
+    }
+    if (needsWater && !meteredInputs.water) {
+      message.error('Missing water metered inputs');
+      return false;
+    }
+    return true;
+  };
 
   // Summary stats
   const stats = useMemo(() => {
@@ -461,7 +572,10 @@ const UtilityCalculations = () => {
             <Button
               type="primary"
               size="small"
-              onClick={() => finalizeMutation.mutate(record.id)}
+              onClick={() => {
+                if (record.id === existingCalculation?.id && !checkMeteredInputsBeforeFinalize(record)) return;
+                finalizeMutation.mutate(record.id);
+              }}
               loading={finalizeMutation.isPending}
             >
               Finalizează
@@ -994,6 +1108,153 @@ const UtilityCalculations = () => {
             </Card>
           </Col>
         </Row>
+      )}
+
+      {/* Metered Inputs Block */}
+      {hasExistingCalculation && (needsGas || needsWater) && (
+        <Card
+          title={
+            <Space>
+              <ThunderboltOutlined />
+              <span>Contori — inputs factură furnizor</span>
+            </Space>
+          }
+          style={{ marginTop: 24 }}
+        >
+          {needsGas && (
+            <Card
+              size="small"
+              style={{ marginBottom: 16 }}
+              title={
+                <Space>
+                  <span>Gaz</span>
+                  {meteredInputs.gas ? (
+                    <Tag color="success" icon={<CheckCircleOutlined />}>Saved</Tag>
+                  ) : (
+                    <Tag color="warning">Nesalvat</Tag>
+                  )}
+                </Space>
+              }
+            >
+              <Form form={gasForm} layout="inline" disabled={isPeriodFinalized}>
+                <Form.Item
+                  label="Factură furnizor"
+                  name="received_invoice_id"
+                  rules={[{ required: true, message: 'Selectați factura' }]}
+                  style={{ minWidth: 260 }}
+                >
+                  <Select placeholder="Selectați factura de gaz" style={{ width: 260 }}>
+                    {(invoicesByType['gas'] || []).map((inv) => (
+                      <Option key={inv.id} value={inv.id}>
+                        {inv.invoice_number} — {inv.provider_name} ({formatCurrency(inv.amount)})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="Total m³"
+                  name="total_units"
+                  rules={[{ required: true, message: 'Introduceți total m³' }]}
+                >
+                  <InputNumber min={0} step={0.01} style={{ width: 140 }} />
+                </Form.Item>
+                <Form.Item>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={handleSaveGasMeteredInput}
+                    loading={saveMeteredInputMutation.isPending}
+                  >
+                    Salvează
+                  </Button>
+                </Form.Item>
+              </Form>
+            </Card>
+          )}
+
+          {needsWater && (
+            <Card
+              size="small"
+              style={{ marginBottom: 16 }}
+              title={
+                <Space>
+                  <span>Apă</span>
+                  {meteredInputs.water ? (
+                    <Tag color="success" icon={<CheckCircleOutlined />}>Saved</Tag>
+                  ) : (
+                    <Tag color="warning">Nesalvat</Tag>
+                  )}
+                </Space>
+              }
+            >
+              <Form form={waterForm} layout="inline" disabled={isPeriodFinalized}>
+                <Form.Item
+                  label="Factură furnizor"
+                  name="received_invoice_id"
+                  rules={[{ required: true, message: 'Selectați factura' }]}
+                >
+                  <Select placeholder="Selectați factura de apă" style={{ width: 260 }}>
+                    {(invoicesByType['water'] || []).map((inv) => (
+                      <Option key={inv.id} value={inv.id}>
+                        {inv.invoice_number} — {inv.provider_name} ({formatCurrency(inv.amount)})
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="Total m³"
+                  name="total_units"
+                  rules={[{ required: true, message: 'Introduceți total m³' }]}
+                >
+                  <InputNumber min={0} step={0.01} style={{ width: 120 }} />
+                </Form.Item>
+                <Form.Item
+                  label="Cost consum (RON)"
+                  name="consumption_amount"
+                  rules={[{ required: true, message: 'Introduceți costul de consum' }]}
+                >
+                  <InputNumber min={0} step={0.01} style={{ width: 140 }} />
+                </Form.Item>
+                <Form.Item
+                  label="Cost apă pluvială (RON)"
+                  name="rain_amount"
+                  rules={[{ required: true, message: 'Introduceți costul apei pluviale' }]}
+                >
+                  <InputNumber min={0} step={0.01} style={{ width: 140 }} />
+                </Form.Item>
+                <Form.Item>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={handleSaveWaterMeteredInput}
+                    loading={saveMeteredInputMutation.isPending}
+                  >
+                    Salvează
+                  </Button>
+                </Form.Item>
+              </Form>
+            </Card>
+          )}
+
+          <Alert
+            type={(needsGas && !meteredInputs.gas) || (needsWater && !meteredInputs.water) ? 'warning' : 'success'}
+            showIcon
+            message={
+              <Space>
+                {needsGas && (
+                  <Tag color={meteredInputs.gas ? 'success' : 'warning'}>
+                    Gaz: {meteredInputs.gas ? 'salvat' : 'necesar'}
+                  </Tag>
+                )}
+                {needsWater && (
+                  <Tag color={meteredInputs.water ? 'success' : 'warning'}>
+                    Apă: {meteredInputs.water ? 'salvat' : 'necesar'}
+                  </Tag>
+                )}
+              </Space>
+            }
+          />
+        </Card>
       )}
 
       {/* Previous Calculations */}
