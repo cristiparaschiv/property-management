@@ -19,6 +19,7 @@ import UtilityProviders from './pages/UtilityProviders';
 import ReceivedInvoices from './pages/ReceivedInvoices';
 import Meters from './pages/Meters';
 import MeterReadings from './pages/MeterReadings';
+import GasReadings from './pages/GasReadings';
 import UtilityCalculations from './pages/UtilityCalculations';
 import Invoices from './pages/Invoices';
 import Reports from './pages/Reports';
@@ -66,6 +67,7 @@ function AppContent() {
             <Route path="received-invoices" element={<ReceivedInvoices />} />
             <Route path="meters" element={<Meters />} />
             <Route path="meter-readings" element={<MeterReadings />} />
+            <Route path="gas-readings" element={<GasReadings />} />
             <Route path="utility-calculations" element={<UtilityCalculations />} />
             <Route path="invoices" element={<Invoices />} />
             <Route path="reports" element={<Reports />} />
