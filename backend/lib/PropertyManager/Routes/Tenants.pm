@@ -27,7 +27,11 @@ get '' => sub {
     my @data = map {
         my %tenant = $_->get_columns;
         $tenant{utility_percentages} = [
-            map { { utility_type => $_->utility_type, percentage => $_->percentage + 0 } }
+            map { {
+                utility_type => $_->utility_type,
+                percentage => $_->percentage + 0,
+                uses_meter => $_->uses_meter ? 1 : 0,
+            } }
             $_->utility_percentages->all
         ];
         \%tenant;
@@ -53,6 +57,14 @@ get '/:id' => sub {
         map { $_->utility_type => $_->percentage + 0 }
         $tenant->utility_percentages->all
     };
+    $data{utility_percentages} = [
+        map { {
+            utility_type => $_->utility_type,
+            percentage => $_->percentage + 0,
+            uses_meter => $_->uses_meter ? 1 : 0,
+        } }
+        $tenant->utility_percentages->all
+    ];
 
     return { success => 1, data => { tenant => \%data } };
 };
@@ -107,6 +119,7 @@ post '' => sub {
                     $tenant->create_related('utility_percentages', {
                         utility_type => $pct->{utility_type},
                         percentage => $pct->{percentage},
+                        uses_meter => $pct->{uses_meter} ? 1 : 0,
                     });
                 }
             }
@@ -251,9 +264,27 @@ put '/:id/percentages' => sub {
         return { success => 0, error => 'percentages hash is required' };
     }
 
-    # Validate all percentages are within valid range (0-100)
+    # Normalize entries: accept either scalar percentage or hashref
+    # { percentage => X, uses_meter => 0|1 }
+    my %normalized;
     foreach my $utility_type (keys %$percentages) {
-        my $pct = $percentages->{$utility_type};
+        my $entry = $percentages->{$utility_type};
+        if (ref $entry eq 'HASH') {
+            $normalized{$utility_type} = {
+                percentage => $entry->{percentage} // 0,
+                uses_meter => $entry->{uses_meter} ? 1 : 0,
+            };
+        } else {
+            $normalized{$utility_type} = {
+                percentage => $entry // 0,
+                uses_meter => 0,
+            };
+        }
+    }
+
+    # Validate all percentages are within valid range (0-100)
+    foreach my $utility_type (keys %normalized) {
+        my $pct = $normalized{$utility_type}{percentage};
         if ($pct < 0 || $pct > 100) {
             status 400;
             return { success => 0, error => "Percentage for $utility_type must be between 0 and 100" };
@@ -263,11 +294,12 @@ put '/:id/percentages' => sub {
     my $error;
     try {
         schema->txn_do(sub {
-            foreach my $utility_type (keys %$percentages) {
+            foreach my $utility_type (keys %normalized) {
                 schema->resultset('TenantUtilityPercentage')->update_or_create({
                     tenant_id => $tenant->id,
                     utility_type => $utility_type,
-                    percentage => $percentages->{$utility_type},
+                    percentage => $normalized{$utility_type}{percentage},
+                    uses_meter => $normalized{$utility_type}{uses_meter},
                 }, {
                     key => 'tenant_utility_unique',
                 });
@@ -284,10 +316,18 @@ put '/:id/percentages' => sub {
     }
 
     # Retrieve updated percentages
-    my %result_percentages = map { $_->utility_type => $_->percentage + 0 }
-        $tenant->utility_percentages->all;
+    my @rows = $tenant->utility_percentages->all;
+    my %result_percentages = map { $_->utility_type => $_->percentage + 0 } @rows;
+    my @utility_percentages = map { {
+        utility_type => $_->utility_type,
+        percentage => $_->percentage + 0,
+        uses_meter => $_->uses_meter ? 1 : 0,
+    } } @rows;
 
-    return { success => 1, data => { percentages => \%result_percentages } };
+    return { success => 1, data => {
+        percentages => \%result_percentages,
+        utility_percentages => \@utility_percentages,
+    } };
 };
 
 1;

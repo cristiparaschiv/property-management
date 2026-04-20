@@ -130,8 +130,15 @@ const Tenants = () => {
   const showPercentagesModal = (tenant) => {
     setSelectedTenant(tenant);
     const percentages = {};
+    // Initialize all utility types with defaults so the form has predictable shape
+    UTILITY_TYPE_OPTIONS.forEach((opt) => {
+      percentages[opt.value] = { percentage: 0, uses_meter: false };
+    });
     tenant.utility_percentages?.forEach((up) => {
-      percentages[up.utility_type] = up.percentage;
+      percentages[up.utility_type] = {
+        percentage: up.percentage,
+        uses_meter: !!up.uses_meter,
+      };
     });
     percentagesForm.setFieldsValue(percentages);
     setIsPercentagesModalOpen(true);
@@ -472,16 +479,46 @@ const Tenants = () => {
         confirmLoading={updatePercentagesMutation.isPending}
       >
         <Form form={percentagesForm} layout="vertical">
-          {UTILITY_TYPE_OPTIONS.map((option) => (
-            <Form.Item
-              key={option.value}
-              label={`${option.label} (%)`}
-              name={option.value}
-              rules={[{ type: 'number', min: 0, max: 100 }]}
-            >
-              <InputNumber min={0} max={100} style={{ width: '100%' }} />
-            </Form.Item>
-          ))}
+          {UTILITY_TYPE_OPTIONS.map((option) => {
+            const hasMeterToggle = option.value === 'gas' || option.value === 'water';
+            return (
+              <div key={option.value} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prev, curr) =>
+                    prev?.[option.value]?.uses_meter !== curr?.[option.value]?.uses_meter
+                  }
+                >
+                  {({ getFieldValue }) => {
+                    const usesMeter = !!getFieldValue([option.value, 'uses_meter']);
+                    let label = `${option.label} (%)`;
+                    if (option.value === 'water') {
+                      label = usesMeter ? 'Procent apă pluvială (%)' : 'Procent apă (%)';
+                    }
+                    return (
+                      <Form.Item
+                        label={label}
+                        name={[option.value, 'percentage']}
+                        rules={[{ type: 'number', min: 0, max: 100 }]}
+                        style={{ flex: 1 }}
+                      >
+                        <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+                {hasMeterToggle && (
+                  <Form.Item
+                    label="Contor"
+                    name={[option.value, 'uses_meter']}
+                    valuePropName="checked"
+                  >
+                    <Switch checkedChildren="Da" unCheckedChildren="Nu" />
+                  </Form.Item>
+                )}
+              </div>
+            );
+          })}
         </Form>
       </Modal>
     </div>
