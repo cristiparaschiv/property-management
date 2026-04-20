@@ -20,6 +20,7 @@ import ReceivedInvoices from './pages/ReceivedInvoices';
 import Meters from './pages/Meters';
 import MeterReadings from './pages/MeterReadings';
 import GasReadings from './pages/GasReadings';
+import WaterReadings from './pages/WaterReadings';
 import UtilityCalculations from './pages/UtilityCalculations';
 import Invoices from './pages/Invoices';
 import Reports from './pages/Reports';
@@ -68,6 +69,7 @@ function AppContent() {
             <Route path="meters" element={<Meters />} />
             <Route path="meter-readings" element={<MeterReadings />} />
             <Route path="gas-readings" element={<GasReadings />} />
+            <Route path="water-readings" element={<WaterReadings />} />
             <Route path="utility-calculations" element={<UtilityCalculations />} />
             <Route path="invoices" element={<Invoices />} />
             <Route path="reports" element={<Reports />} />

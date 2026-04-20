@@ -22,6 +22,7 @@ import {
   CloudOutlined,
   PieChartOutlined,
   FireOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import useAuthStore from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
@@ -186,6 +187,11 @@ const MainLayout = () => {
       key: '/gas-readings',
       icon: <FireOutlined />,
       label: <Link to="/gas-readings">Indexuri Gaz</Link>,
+    },
+    {
+      key: '/water-readings',
+      icon: <ExperimentOutlined />,
+      label: <Link to="/water-readings">Indexuri Apă</Link>,
     },
     {
       key: '/utility-calculations',
