@@ -29,17 +29,33 @@ my $schema = TestHelper::schema();
 #   - GasReading Tenant B 2026-04: 200 -> 220 (consumption 20)
 #   - WaterReading Tenant B 2026-04: 500 -> 520 (consumption 20)
 
+sub _safe_delete_all {
+    my ($rs_name) = @_;
+    eval { $schema->resultset($rs_name)->delete_all; 1 }
+        or warn "cleanup: delete_all $rs_name failed: $@";
+}
+
+sub _wipe_all {
+    # Delete invoice-related rows first so Tenant deletes don't hit FK
+    # constraints from `invoices` (which has no ON DELETE CASCADE on
+    # tenant_id). Each step is wrapped so one stuck row doesn't block the
+    # rest.
+    _safe_delete_all('InvoiceItem');
+    _safe_delete_all('Invoice');
+    _safe_delete_all('UtilityCalculationDetail');
+    _safe_delete_all('MeteredCalculationInput');
+    _safe_delete_all('UtilityCalculation');
+    _safe_delete_all('GasReading');
+    _safe_delete_all('WaterReading');
+    _safe_delete_all('ReceivedInvoice');
+    _safe_delete_all('UtilityProvider');
+    _safe_delete_all('TenantUtilityPercentage');
+    _safe_delete_all('Tenant');
+}
+
 sub build_fixtures {
     # Wipe everything related
-    $schema->resultset('UtilityCalculationDetail')->delete_all;
-    $schema->resultset('MeteredCalculationInput')->delete_all;
-    $schema->resultset('UtilityCalculation')->delete_all;
-    $schema->resultset('GasReading')->delete_all;
-    $schema->resultset('WaterReading')->delete_all;
-    $schema->resultset('ReceivedInvoice')->delete_all;
-    $schema->resultset('UtilityProvider')->delete_all;
-    $schema->resultset('TenantUtilityPercentage')->delete_all;
-    $schema->resultset('Tenant')->delete_all;
+    _wipe_all();
 
     my $tenant_a = TestHelper::create_test_tenant(
         $schema,
@@ -211,12 +227,10 @@ subtest 'missing tenant reading blocks finalization' => sub {
     like($@, qr/reading/i, 'Missing reading raises error mentioning reading');
 };
 
-# Cleanup
-$schema->resultset('UtilityCalculationDetail')->delete_all;
-$schema->resultset('MeteredCalculationInput')->delete_all;
-$schema->resultset('UtilityCalculation')->delete_all;
-$schema->resultset('GasReading')->delete_all;
-$schema->resultset('WaterReading')->delete_all;
-TestHelper::cleanup_test_data($schema);
+# Cleanup -- delete child invoices before TestHelper::cleanup_test_data
+# (which deletes tenants) to avoid FK failures on invoices.tenant_id.
+_wipe_all();
+eval { TestHelper::cleanup_test_data($schema); 1 }
+    or warn "cleanup_test_data failed: $@";
 
 done_testing();
