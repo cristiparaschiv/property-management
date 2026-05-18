@@ -199,7 +199,7 @@ const GasReadings = () => {
   ];
 
   const readings = readingsData?.data || [];
-  const tenants = tenantsData?.data || [];
+  const tenants = tenantsData?.data?.tenants || [];
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
