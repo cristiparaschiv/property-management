@@ -37,24 +37,38 @@ post '' => sub {
         return { success => 0, error => "utility_type must be 'gas' or 'water'" };
     }
 
+    my $consumption_amount = $d->{consumption_amount};
+    my $rain_amount        = $d->{rain_amount};
+
     if ($d->{utility_type} eq 'water') {
-        unless (defined $d->{consumption_amount} && defined $d->{rain_amount}) {
+        unless (defined $rain_amount) {
             status 400;
-            return { success => 0, error => "consumption_amount and rain_amount are required for water" };
+            return { success => 0, error => "rain_amount is required for water" };
         }
+        # Derivare: consum = valoarea facturii - pluviala
+        my $ri = schema->resultset('ReceivedInvoice')->find($d->{received_invoice_id});
+        unless ($ri) {
+            status 400;
+            return { success => 0, error => "received_invoice_id invalid" };
+        }
+        $consumption_amount = $ri->amount - $rain_amount;
+    } else {
+        # gaz: fara split
+        $consumption_amount = undef;
+        $rain_amount        = undef;
     }
 
     my $row;
     try {
         $row = schema->resultset('MeteredCalculationInput')->update_or_create(
             {
-                calculation_id => $d->{calculation_id},
-                utility_type   => $d->{utility_type},
+                calculation_id      => $d->{calculation_id},
+                utility_type        => $d->{utility_type},
                 received_invoice_id => $d->{received_invoice_id},
-                total_units    => $d->{total_units},
-                consumption_amount => $d->{consumption_amount},
-                rain_amount    => $d->{rain_amount},
-                notes          => $d->{notes},
+                total_units         => $d->{total_units},
+                consumption_amount  => $consumption_amount,
+                rain_amount         => $rain_amount,
+                notes               => $d->{notes},
             },
             { key => 'calc_utility_unique' }
         );
