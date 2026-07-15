@@ -275,9 +275,14 @@ put '/:id/percentages' => sub {
                 uses_meter => $entry->{uses_meter} ? 1 : 0,
             };
         } else {
+            # Scalar: pastreaza uses_meter existent din DB (nu-l reseta).
+            my $existing = schema->resultset('TenantUtilityPercentage')->search({
+                tenant_id    => $tenant->id,
+                utility_type => $utility_type,
+            })->first;
             $normalized{$utility_type} = {
                 percentage => $entry // 0,
-                uses_meter => 0,
+                uses_meter => ($existing && $existing->uses_meter) ? 1 : 0,
             };
         }
     }

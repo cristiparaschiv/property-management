@@ -15,7 +15,7 @@ my $schema = TestHelper::schema();
 
 TestHelper::cleanup_test_data($schema);
 
-plan tests => 7;
+plan tests => 8;
 
 # ============================================================================
 # Test: GET /api/tenants - list tenants
@@ -195,6 +195,35 @@ subtest 'GET /api/tenants - filter by active status' => sub {
     my @tenants = @{$data->{data}{tenants}};
     ok(scalar @tenants > 0, 'At least one active tenant');
     ok((grep { $_->{id} == $active_tenant->id } @tenants), 'Active tenant in results');
+};
+
+subtest 'PUT percentages - scalar nu reseteaza uses_meter' => sub {
+    plan tests => 3;
+
+    my $tenant = TestHelper::create_test_tenant(
+        TestHelper::schema(),
+        name => 'Uses Meter Preserve',
+    );
+
+    # 1) Seteaza gas cu uses_meter=1 prin hashref
+    my $res1 = TestHelper::auth_put(
+        $test, "/api/tenants/" . $tenant->id . "/percentages",
+        { percentages => { gas => { percentage => 20, uses_meter => 1 } } },
+    );
+    is($res1->code, 200, 'Set uses_meter=1 OK');
+
+    # 2) Salveaza gas ca scalar (fara uses_meter)
+    my $res2 = TestHelper::auth_put(
+        $test, "/api/tenants/" . $tenant->id . "/percentages",
+        { percentages => { gas => 25 } },
+    );
+    is($res2->code, 200, 'Scalar update OK');
+
+    # 3) uses_meter trebuie sa ramana 1
+    my $data = decode_json($res2->content);
+    my ($gas) = grep { $_->{utility_type} eq 'gas' }
+        @{ $data->{data}{utility_percentages} };
+    is($gas->{uses_meter}, 1, 'uses_meter pastrat dupa scalar');
 };
 
 TestHelper::cleanup_test_data($schema);

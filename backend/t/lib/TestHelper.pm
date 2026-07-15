@@ -45,6 +45,7 @@ our $schema;
 our $app;
 our $test;
 our $token;
+our $csrf_token;
 
 =head2 schema
 
@@ -94,7 +95,7 @@ sub login {
 
     $test_obj ||= app();
     $username ||= 'admin';
-    $password ||= 'changeme';
+    $password ||= 'Admin123!';
 
     my $req = POST '/api/auth/login',
         Content_Type => 'application/json',
@@ -112,9 +113,23 @@ sub login {
 
     my $data = decode_json($res->content);
 
-    if ($data->{success} && $data->{data}{token}) {
-        $token = $data->{data}{token};
-        return $token;
+    if ($data->{success}) {
+        # Extract token from Set-Cookie header
+        my $set_cookie = $res->header('Set-Cookie');
+        if ($set_cookie && $set_cookie =~ /auth_token=([^;]+)/) {
+            $token = $1;
+        }
+        # Fallback: try to get token from response data (for backwards compatibility)
+        elsif ($data->{data}{token}) {
+            $token = $data->{data}{token};
+        }
+
+        # Extract CSRF token from response data
+        if ($data->{data}{csrf_token}) {
+            $csrf_token = $data->{data}{csrf_token};
+        }
+
+        return $token if $token;
     }
 
     return undef;
@@ -172,6 +187,9 @@ sub auth_post {
     my $req = HTTP::Request->new(POST => $url);
     $req->header('Authorization' => "Bearer $auth_token");
     $req->header('Content-Type' => 'application/json');
+    if ($csrf_token) {
+        $req->header('X-CSRF-Token' => $csrf_token);
+    }
     $req->content(encode_json($data || {}));
 
     return $test_obj->request($req);
@@ -195,6 +213,9 @@ sub auth_put {
     my $req = HTTP::Request->new(PUT => $url);
     $req->header('Authorization' => "Bearer $auth_token");
     $req->header('Content-Type' => 'application/json');
+    if ($csrf_token) {
+        $req->header('X-CSRF-Token' => $csrf_token);
+    }
     $req->content(encode_json($data || {}));
 
     return $test_obj->request($req);
@@ -217,6 +238,9 @@ sub auth_delete {
 
     my $req = HTTP::Request->new(DELETE => $url);
     $req->header('Authorization' => "Bearer $auth_token");
+    if ($csrf_token) {
+        $req->header('X-CSRF-Token' => $csrf_token);
+    }
 
     return $test_obj->request($req);
 }
@@ -564,6 +588,7 @@ Reset cached authentication token.
 
 sub reset_token_cache {
     $token = undef;
+    $csrf_token = undef;
 }
 
 1;
