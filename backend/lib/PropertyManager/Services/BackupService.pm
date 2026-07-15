@@ -101,6 +101,11 @@ sub create_backup {
         '--routines',
         '--triggers',
         '--add-drop-table',
+        # Exclude the backup history table: restoring a backup must NOT
+        # overwrite it, otherwise the row for THIS backup (whose drive_file_id
+        # and 'completed' status are set only AFTER the dump runs) is reverted,
+        # orphaning the Drive archive and showing it as "failed".
+        '--ignore-table=' . $db->{name} . '.backup_history',
         '--result-file=' . $sql_file,
     );
 
