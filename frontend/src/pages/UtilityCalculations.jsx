@@ -40,6 +40,9 @@ import { meterReadingsService } from '../services/meterReadingsService';
 import { tenantsService } from '../services/tenantsService';
 import { invoicesService } from '../services/invoicesService';
 import { meteredInputsService } from '../services/meteredInputsService';
+import { gasReadingsService } from '../services/gasReadingsService';
+import { waterReadingsService } from '../services/waterReadingsService';
+import { computeGasShare, computeWaterShare } from '../utils/meteredCalc';
 import { formatCurrency, formatNumber, getMonthName } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
 import {
@@ -262,52 +265,6 @@ const UtilityCalculations = () => {
     return { needsGas: g, needsWater: w };
   }, [activeTenants]);
 
-  // Calculate costs per tenant
-  const tenantCosts = useMemo(() => {
-    const costs = {};
-    activeTenants.forEach((tenant) => {
-      costs[tenant.id] = {
-        tenant_name: tenant.name,
-        utilities: {},
-        total: 0,
-      };
-
-      UTILITY_TYPE_OPTIONS.forEach((option) => {
-        const utilityType = option.value;
-        const invoiceTotal = totalsByType[utilityType] || 0;
-        const percentage = tenantPercentages[tenant.id]?.[utilityType] || 0;
-        const amount = (invoiceTotal * percentage) / 100;
-
-        costs[tenant.id].utilities[utilityType] = {
-          invoice_total: invoiceTotal,
-          percentage: percentage,
-          amount: amount,
-        };
-        costs[tenant.id].total += amount;
-      });
-    });
-    return costs;
-  }, [activeTenants, totalsByType, tenantPercentages]);
-
-  // Calculate company portions (100% - sum of tenant percentages)
-  const companyPortions = useMemo(() => {
-    const portions = {};
-    UTILITY_TYPE_OPTIONS.forEach((option) => {
-      const utilityType = option.value;
-      const invoiceTotal = totalsByType[utilityType] || 0;
-      let tenantPctSum = 0;
-      activeTenants.forEach((tenant) => {
-        tenantPctSum += tenantPercentages[tenant.id]?.[utilityType] || 0;
-      });
-      const companyPct = Math.max(0, 100 - tenantPctSum);
-      portions[utilityType] = {
-        percentage: companyPct,
-        amount: (invoiceTotal * companyPct) / 100,
-      };
-    });
-    return portions;
-  }, [totalsByType, activeTenants, tenantPercentages]);
-
   const calculations = calculationsData?.data || [];
 
   // Check if calculation exists for current period
@@ -336,6 +293,143 @@ const UtilityCalculations = () => {
     });
     return map;
   }, [meteredInputsData]);
+
+  // Fetch gas/water readings for the selected period (for live metered consumption)
+  const { data: gasReadingsData } = useQuery({
+    queryKey: ['gas-readings-period', selectedYear, selectedMonth],
+    queryFn: () => gasReadingsService.getByPeriod(selectedYear, selectedMonth),
+    enabled: !!selectedYear && !!selectedMonth,
+  });
+  const { data: waterReadingsData } = useQuery({
+    queryKey: ['water-readings-period', selectedYear, selectedMonth],
+    queryFn: () => waterReadingsService.getByPeriod(selectedYear, selectedMonth),
+    enabled: !!selectedYear && !!selectedMonth,
+  });
+
+  // Consumption per tenant (index diff), keyed by tenant_id
+  const gasConsumptionByTenant = useMemo(() => {
+    const map = {};
+    (gasReadingsData?.data || []).forEach((r) => {
+      map[r.tenant_id] = r.consumption != null
+        ? Number(r.consumption)
+        : Number(r.reading_value || 0) - Number(r.previous_reading_value || 0);
+    });
+    return map;
+  }, [gasReadingsData]);
+
+  const waterConsumptionByTenant = useMemo(() => {
+    const map = {};
+    (waterReadingsData?.data || []).forEach((r) => {
+      map[r.tenant_id] = r.consumption != null
+        ? Number(r.consumption)
+        : Number(r.reading_value || 0) - Number(r.previous_reading_value || 0);
+    });
+    return map;
+  }, [waterReadingsData]);
+
+  // Intoarce { metered: bool, valid, percentage, amount, ...detail } pentru gaz/apa cu contor.
+  const meteredResultFor = (tenant, utilityType) => {
+    const up = (tenant.utility_percentages || []).find(
+      (x) => x.utility_type === utilityType
+    );
+    if (!up || !up.uses_meter) return { metered: false };
+
+    if (utilityType === 'gas') {
+      const input = meteredInputs.gas;
+      const inv = input
+        ? (invoicesByType['gas'] || []).find((i) => i.id === input.received_invoice_id)
+        : null;
+      const r = computeGasShare({
+        consumption: gasConsumptionByTenant[tenant.id] || 0,
+        totalUnits: input ? Number(input.total_units) : 0,
+        invoiceAmount: inv ? Number(inv.amount) : 0,
+      });
+      return { metered: true, ...r };
+    }
+
+    if (utilityType === 'water') {
+      const input = meteredInputs.water;
+      const inv = input
+        ? (invoicesByType['water'] || []).find((i) => i.id === input.received_invoice_id)
+        : null;
+      const r = computeWaterShare({
+        consumption: waterConsumptionByTenant[tenant.id] || 0,
+        totalUnits: input ? Number(input.total_units) : 0,
+        invoiceAmount: inv ? Number(inv.amount) : 0,
+        rainAmount: input ? Number(input.rain_amount) : 0,
+        rainPct: Number(up.percentage) || 0,
+      });
+      return { metered: true, ...r };
+    }
+
+    return { metered: false };
+  };
+
+  // Calculate costs per tenant
+  const tenantCosts = useMemo(() => {
+    const costs = {};
+    activeTenants.forEach((tenant) => {
+      costs[tenant.id] = {
+        tenant_name: tenant.name,
+        utilities: {},
+        total: 0,
+      };
+
+      UTILITY_TYPE_OPTIONS.forEach((option) => {
+        const utilityType = option.value;
+        const invoiceTotal = totalsByType[utilityType] || 0;
+        const meteredRes = meteredResultFor(tenant, utilityType);
+
+        let percentage, amount;
+        if (meteredRes.metered) {
+          percentage = meteredRes.valid ? meteredRes.percentage : 0;
+          amount = meteredRes.valid ? meteredRes.amount : 0;
+        } else {
+          percentage = tenantPercentages[tenant.id]?.[utilityType] || 0;
+          amount = (invoiceTotal * percentage) / 100;
+        }
+
+        costs[tenant.id].utilities[utilityType] = {
+          invoice_total: invoiceTotal,
+          percentage,
+          amount,
+          metered: meteredRes.metered,
+          metered_valid: meteredRes.metered ? !!meteredRes.valid : true,
+          detail: meteredRes.metered ? meteredRes : null,
+        };
+        costs[tenant.id].total += amount;
+      });
+    });
+    return costs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeTenants,
+    totalsByType,
+    tenantPercentages,
+    meteredInputs,
+    invoicesByType,
+    gasConsumptionByTenant,
+    waterConsumptionByTenant,
+  ]);
+
+  // Calculate company portions (100% - sum of tenants' effective percentages)
+  const companyPortions = useMemo(() => {
+    const portions = {};
+    UTILITY_TYPE_OPTIONS.forEach((option) => {
+      const utilityType = option.value;
+      const invoiceTotal = totalsByType[utilityType] || 0;
+      let tenantPctSum = 0;
+      activeTenants.forEach((tenant) => {
+        tenantPctSum += tenantCosts[tenant.id]?.utilities?.[utilityType]?.percentage || 0;
+      });
+      const companyPct = Math.max(0, 100 - tenantPctSum);
+      portions[utilityType] = {
+        percentage: companyPct,
+        amount: (invoiceTotal * companyPct) / 100,
+      };
+    });
+    return portions;
+  }, [totalsByType, activeTenants, tenantCosts]);
 
   const [gasForm] = Form.useForm();
   const [waterForm] = Form.useForm();
@@ -1027,34 +1121,60 @@ const UtilityCalculations = () => {
                                 {option.label}
                               </Text>
                               <Space direction="vertical" size={0} style={{ width: '100%' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <InputNumber
-                                    min={0}
-                                    max={100}
-                                    value={
-                                      tenantPercentages[tenant.id]?.[option.value] || 0
-                                    }
-                                    onChange={(val) =>
-                                      handlePercentageChange(tenant.id, option.value, val)
-                                    }
-                                    style={{ width: 70 }}
-                                    size="small"
-                                  />
-                                  <Text type="secondary">%</Text>
-                                </div>
-                                {invoiceTotal > 0 ? (
-                                  <Text
-                                    style={{
-                                      color: 'var(--pm-color-primary)',
-                                      fontWeight: 500,
-                                    }}
-                                  >
-                                    = {formatCurrency(cost?.amount || 0)}
-                                  </Text>
+                                {cost?.metered ? (
+                                  cost.metered_valid ? (
+                                    <>
+                                      <Text
+                                        style={{
+                                          color: 'var(--pm-color-primary)',
+                                          fontWeight: 500,
+                                        }}
+                                      >
+                                        {Number(cost.percentage || 0).toFixed(2)}% → {formatCurrency(cost.amount || 0)}
+                                      </Text>
+                                      {cost.detail && cost.detail.rainShare != null && (
+                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                          consum {formatCurrency(cost.detail.consumptionShare)} + pluvială {formatCurrency(cost.detail.rainShare)}
+                                        </Text>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <Tag color="warning">
+                                      Lipsește total m³ sau citirea — completați blocul Contori
+                                    </Tag>
+                                  )
                                 ) : (
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    Fără factură
-                                  </Text>
+                                  <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <InputNumber
+                                        min={0}
+                                        max={100}
+                                        value={
+                                          tenantPercentages[tenant.id]?.[option.value] || 0
+                                        }
+                                        onChange={(val) =>
+                                          handlePercentageChange(tenant.id, option.value, val)
+                                        }
+                                        style={{ width: 70 }}
+                                        size="small"
+                                      />
+                                      <Text type="secondary">%</Text>
+                                    </div>
+                                    {invoiceTotal > 0 ? (
+                                      <Text
+                                        style={{
+                                          color: 'var(--pm-color-primary)',
+                                          fontWeight: 500,
+                                        }}
+                                      >
+                                        = {formatCurrency(cost?.amount || 0)}
+                                      </Text>
+                                    ) : (
+                                      <Text type="secondary" style={{ fontSize: 12 }}>
+                                        Fără factură
+                                      </Text>
+                                    )}
+                                  </>
                                 )}
                               </Space>
                             </div>
