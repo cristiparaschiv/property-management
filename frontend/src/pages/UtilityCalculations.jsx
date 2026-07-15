@@ -356,7 +356,6 @@ const UtilityCalculations = () => {
       waterForm.setFieldsValue({
         received_invoice_id: meteredInputs.water.received_invoice_id,
         total_units: Number(meteredInputs.water.total_units),
-        consumption_amount: meteredInputs.water.consumption_amount != null ? Number(meteredInputs.water.consumption_amount) : undefined,
         rain_amount: meteredInputs.water.rain_amount != null ? Number(meteredInputs.water.rain_amount) : undefined,
       });
     } else {
@@ -375,11 +374,26 @@ const UtilityCalculations = () => {
     },
   });
 
+  const ensureCalculation = async () => {
+    if (existingCalculation?.id) return existingCalculation.id;
+    const res = await createMutation.mutateAsync({
+      period_year: selectedYear,
+      period_month: selectedMonth,
+      overrides: tenantPercentages,
+    });
+    // POST /api/utility-calculations intoarce
+    //   { success, data: { calculation: { id, ...columns } } }
+    // (Routes/UtilityCalculations.pm:199), iar serviciul intoarce response.data.
+    return res?.data?.calculation?.id ?? null;
+  };
+
   const handleSaveGasMeteredInput = async () => {
     try {
       const values = await gasForm.validateFields();
+      const calcId = await ensureCalculation();
+      if (!calcId) { message.error('Nu s-a putut crea calculul lunii'); return; }
       saveMeteredInputMutation.mutate({
-        calculation_id: existingCalculation.id,
+        calculation_id: calcId,
         utility_type: 'gas',
         received_invoice_id: values.received_invoice_id,
         total_units: values.total_units,
@@ -390,12 +404,13 @@ const UtilityCalculations = () => {
   const handleSaveWaterMeteredInput = async () => {
     try {
       const values = await waterForm.validateFields();
+      const calcId = await ensureCalculation();
+      if (!calcId) { message.error('Nu s-a putut crea calculul lunii'); return; }
       saveMeteredInputMutation.mutate({
-        calculation_id: existingCalculation.id,
+        calculation_id: calcId,
         utility_type: 'water',
         received_invoice_id: values.received_invoice_id,
         total_units: values.total_units,
-        consumption_amount: values.consumption_amount,
         rain_amount: values.rain_amount,
       });
     } catch (_) { /* validation */ }
@@ -1111,7 +1126,7 @@ const UtilityCalculations = () => {
       )}
 
       {/* Metered Inputs Block */}
-      {hasExistingCalculation && (needsGas || needsWater) && (
+      {(needsGas || needsWater) && (
         <Card
           title={
             <Space>
@@ -1209,18 +1224,29 @@ const UtilityCalculations = () => {
                   <InputNumber min={0} step={0.01} style={{ width: 120 }} />
                 </Form.Item>
                 <Form.Item
-                  label="Cost consum (RON)"
-                  name="consumption_amount"
-                  rules={[{ required: true, message: 'Introduceți costul de consum' }]}
-                >
-                  <InputNumber min={0} step={0.01} style={{ width: 140 }} />
-                </Form.Item>
-                <Form.Item
                   label="Cost apă pluvială (RON)"
                   name="rain_amount"
                   rules={[{ required: true, message: 'Introduceți costul apei pluviale' }]}
                 >
                   <InputNumber min={0} step={0.01} style={{ width: 140 }} />
+                </Form.Item>
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(p, c) =>
+                    p.received_invoice_id !== c.received_invoice_id || p.rain_amount !== c.rain_amount
+                  }
+                >
+                  {({ getFieldValue }) => {
+                    const invId = getFieldValue('received_invoice_id');
+                    const inv = (invoicesByType['water'] || []).find((i) => i.id === invId);
+                    const rain = Number(getFieldValue('rain_amount')) || 0;
+                    const cons = inv ? Number(inv.amount) - rain : null;
+                    return (
+                      <Form.Item label="Valoare apă (consum)">
+                        <span>{cons != null ? `${formatCurrency(cons)} (derivat)` : '—'}</span>
+                      </Form.Item>
+                    );
+                  }}
                 </Form.Item>
                 <Form.Item>
                   <Button
