@@ -231,7 +231,7 @@ post '/:id/finalize' => sub {
     my ($error, $missing_data);
     try {
         schema->txn_do(sub {
-            $calculator->recompute_metered_details($calc->id);
+            $calculator->recompute_all_details($calc->id);
             $calc->update({
                 is_finalized => 1,
                 finalized_at => DateTime->now,

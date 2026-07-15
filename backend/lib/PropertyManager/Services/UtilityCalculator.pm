@@ -344,71 +344,82 @@ sub _resolve_tenant_share {
     };
 }
 
-=head2 recompute_metered_details
+=head2 recompute_all_details
 
-Recompute and upsert ONLY the metered (gas/water uses_meter) UtilityCalculationDetail
-rows for a calculation, using strict resolution (dies on missing reading/inputs).
-Non-metered details are left untouched so ad-hoc percentage overrides survive.
+Recompute and rewrite ALL UtilityCalculationDetail rows for a calculation at
+finalize time, so the finalized invoice reflects the real configuration
+regardless of the order data was entered.
+
+- Metered gas/water pairs are computed from meter readings + inputs (strict:
+  a missing reading/input dies so finalize is blocked with a clear message).
+- Non-metered pairs reuse any percentage that was persisted at create time
+  (preserving ad-hoc per-calc overrides); a non-metered pair with no persisted
+  detail falls back to the tenant's stored percentage. This recovers details
+  that a stale draft dropped by sending a shadowing `= 0` override.
+
+Known limitations (both narrow; the primary goal is recovering dropped
+non-metered details, a common failure, at the cost of these rare cases):
+
+- An *intentional* ad-hoc 0% on a non-metered utility (a 0 that differs from
+  the tenant's stored percentage) leaves no persisted detail (amount 0 is not
+  stored), so it is indistinguishable from a dropped detail and is recomputed
+  from the stored percentage. To bill 0, set the tenant's stored percentage to
+  0 (which recomputes to 0 correctly) rather than an ad-hoc per-calc 0.
+- A tenant deactivated between create and finalize is excluded from the
+  recompute (calculate_shares only sees active tenants), so their details are
+  not re-emitted. Deactivated tenants are not invoiced anyway.
 
 =cut
 
-sub recompute_metered_details {
+sub recompute_all_details {
     my ($self, $calculation_id) = @_;
     my $schema = $self->{schema};
 
     my $calc = $schema->resultset('UtilityCalculation')->find($calculation_id)
         or die "Calculation $calculation_id not found\n";
-    my $year  = $calc->period_year;
-    my $month = $calc->period_month;
 
-    my @tenants = $schema->resultset('Tenant')->search({ is_active => 1 })->all;
-    foreach my $tenant (@tenants) {
-        foreach my $ut (qw(gas water)) {
-            my $up = $schema->resultset('TenantUtilityPercentage')->search({
-                tenant_id => $tenant->id, utility_type => $ut,
-            })->first;
-            next unless $up && $up->uses_meter;
+    # Rebuild overrides from the currently-persisted NON-metered details so
+    # ad-hoc percentages survive. Metered (gas/water uses_meter) pairs are left
+    # out so they recompute from meter readings; non-metered pairs with no
+    # persisted detail are left out too, so they fall back to the stored
+    # tenant percentage (recovering an electricity/etc. detail a stale draft
+    # dropped).
+    my %overrides;
+    my @details = $schema->resultset('UtilityCalculationDetail')
+        ->search({ calculation_id => $calculation_id })->all;
+    for my $d (@details) {
+        my $up = $schema->resultset('TenantUtilityPercentage')->search({
+            tenant_id => $d->tenant_id, utility_type => $d->utility_type,
+        })->first;
+        next if $up && $up->uses_meter
+            && ($d->utility_type eq 'gas' || $d->utility_type eq 'water');
+        $overrides{ $d->tenant_id }{ $d->utility_type } = $d->percentage + 0;
+    }
 
-            my $mci = $schema->resultset('MeteredCalculationInput')->search({
-                calculation_id => $calculation_id, utility_type => $ut,
-            })->first;
-            die "Missing metered inputs for $ut in calculation $calculation_id\n" unless $mci;
+    my $result = $self->calculate_shares(
+        year           => $calc->period_year,
+        month          => $calc->period_month,
+        calculation_id => $calculation_id,
+        overrides      => \%overrides,
+        strict         => 1,
+    );
 
-            my $invoice = $schema->resultset('ReceivedInvoice')->find($mci->received_invoice_id)
-                or die "Metered input for $ut references a missing invoice\n";
+    # Rewrite all details from the fresh result.
+    $schema->resultset('UtilityCalculationDetail')
+        ->search({ calculation_id => $calculation_id })->delete;
 
-            my $share = $self->_resolve_tenant_share(
-                tenant_id      => $tenant->id,
-                utility_type   => $ut,
-                invoice        => $invoice,
-                year           => $year,
-                month          => $month,
-                calculation_id => $calculation_id,
-                strict         => 1,
-            );
-
-            my %vals = (
-                received_invoice_id => $invoice->id,
-                percentage          => sprintf('%.2f', $share->{percentage}),
-                amount              => sprintf('%.2f', $share->{amount}),
-            );
-
-            my $detail = $schema->resultset('UtilityCalculationDetail')->search({
-                calculation_id => $calculation_id,
-                tenant_id      => $tenant->id,
-                utility_type   => $ut,
-            })->first;
-
-            if ($detail) {
-                $detail->update(\%vals);
-            } else {
-                $schema->resultset('UtilityCalculationDetail')->create({
-                    calculation_id => $calculation_id,
-                    tenant_id      => $tenant->id,
-                    utility_type   => $ut,
-                    %vals,
-                });
-            }
+    foreach my $ts (@{ $result->{tenant_shares} }) {
+        my $tid = $ts->{tenant_id};
+        foreach my $ut (keys %{ $ts->{utilities} }) {
+            my $u = $ts->{utilities}{$ut};
+            $schema->resultset('UtilityCalculationDetail')->create({
+                calculation_id      => $calculation_id,
+                tenant_id           => $tid,
+                utility_type        => $ut,
+                received_invoice_id => $u->{invoice_id},
+                percentage          => $u->{percentage},
+                amount              => $u->{amount},
+            });
         }
     }
     return 1;
