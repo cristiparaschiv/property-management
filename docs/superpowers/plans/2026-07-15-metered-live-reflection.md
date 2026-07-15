@@ -769,3 +769,348 @@ git commit -m "feat: live metered reflection in tenant cards with correct totals
 **Consistență tipuri:** `computeGasShare`/`computeWaterShare` folosite identic în Task 3 și Task 6; câmpurile `percentage/amount/valid/rainShare/consumptionShare/consumptionCost` coincid. `getByPeriod(year, month)` definit în Task 4, consumat în Task 6. ✓
 
 **Placeholdere:** pașii cu cod conțin cod complet. Două note explicite de implementator (forma răspunsului `create` în Task 5 Step 2; structura rândului de utilitate din card în Task 6 Step 6) sunt puncte reale de adaptare la cod existent, nu placeholdere de logică — ambele indică exact ce să verifice.
+
+---
+
+### Task 7: Fix — metered amounts must reach the persisted/finalized invoice (not shadowed by flat overrides)
+
+**Problem (found in final review):** `UtilityCalculator::calculate_shares` uses a flat override whenever `overrides->{tenant}{utility}` is defined; the create route posts `overrides` for ALL tenant/utility pairs, so the metered branch never runs via HTTP and `finalize` doesn't recompute. Result: the live card shows metered amounts but the persisted/finalized/PDF invoice bills flat percentages.
+
+**Fix:** (1) frontend excludes metered `(tenant, utility)` pairs from the overrides payload so they fall through to `_resolve_tenant_share`; (2) `_resolve_tenant_share` is non-fatal on missing metered data unless `strict` (so auto-draft creation before inputs exist does not roll back); (3) `finalize` surgically recomputes ONLY metered detail rows (strict) — leaving non-metered details, which carry any ad-hoc overrides, untouched — and blocks with a clear error if metered data is missing.
+
+**Files:**
+- Modify: `backend/lib/PropertyManager/Services/UtilityCalculator.pm` (`_resolve_tenant_share` strict param; new `recompute_metered_details`)
+- Modify: `backend/lib/PropertyManager/Routes/UtilityCalculations.pm` (`finalize` recompute)
+- Modify: `frontend/src/pages/UtilityCalculations.jsx` (`buildSaveOverrides`, used in `handleSaveCalculation` + `ensureCalculation`)
+- Test: `backend/t/integration/06_metered_finalize.t` (create)
+
+**Interfaces:**
+- Produces: `UtilityCalculator::recompute_metered_details($calculation_id)` — upserts metered `UtilityCalculationDetail` rows (strict); dies with `Missing ...` on absent reading/inputs. `_resolve_tenant_share(..., strict => 0|1)`.
+
+- [ ] **Step 1: Write the failing integration test**
+
+Create `backend/t/integration/06_metered_finalize.t`:
+
+```perl
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Test::More;
+use FindBin;
+use lib "$FindBin::Bin/../../lib";
+use lib "$FindBin::Bin/../lib";
+use TestHelper;
+use JSON::XS;
+
+my $test   = TestHelper::app();
+my $schema = TestHelper::schema();
+
+# Clean slate for the involved tables
+for my $rs (qw(UtilityCalculationDetail MeteredCalculationInput UtilityCalculation
+               GasReading WaterReading ReceivedInvoice TenantUtilityPercentage)) {
+    eval { $schema->resultset($rs)->delete_all };
+}
+
+my $tenant = TestHelper::create_test_tenant($schema, name => 'Finalize Metered');
+$schema->resultset('TenantUtilityPercentage')->create({
+    tenant_id => $tenant->id, utility_type => 'gas', percentage => 0, uses_meter => 1 });
+$schema->resultset('TenantUtilityPercentage')->create({
+    tenant_id => $tenant->id, utility_type => 'water', percentage => 20, uses_meter => 1 });
+
+my $gas_inv = TestHelper::create_test_received_invoice($schema,
+    utility_type => 'gas', period_start => '2026-06-01', period_end => '2026-06-30',
+    invoice_date => '2026-06-30', due_date => '2026-07-15', amount => 300.00);
+my $water_inv = TestHelper::create_test_received_invoice($schema,
+    utility_type => 'water', period_start => '2026-06-01', period_end => '2026-06-30',
+    invoice_date => '2026-06-30', due_date => '2026-07-15', amount => 1883.58);
+
+$schema->resultset('GasReading')->create({ tenant_id => $tenant->id,
+    reading_date => '2026-06-30', reading_value => 104.30, previous_reading_value => 100.00,
+    consumption => 4.30, period_month => 6, period_year => 2026 });
+$schema->resultset('WaterReading')->create({ tenant_id => $tenant->id,
+    reading_date => '2026-06-30', reading_value => 101.10, previous_reading_value => 100.00,
+    consumption => 1.10, period_month => 6, period_year => 2026 });
+
+my $calc = $schema->resultset('UtilityCalculation')->create({
+    period_month => 6, period_year => 2026, is_finalized => 0 });
+$schema->resultset('MeteredCalculationInput')->create({ calculation_id => $calc->id,
+    received_invoice_id => $gas_inv->id, utility_type => 'gas', total_units => 57.00 });
+$schema->resultset('MeteredCalculationInput')->create({ calculation_id => $calc->id,
+    received_invoice_id => $water_inv->id, utility_type => 'water', total_units => 47.00,
+    consumption_amount => 1104.44, rain_amount => 779.14 });
+
+# Simulate the bug's aftermath: persisted details are WRONG (flat) before finalize.
+$schema->resultset('UtilityCalculationDetail')->create({ calculation_id => $calc->id,
+    tenant_id => $tenant->id, utility_type => 'gas', received_invoice_id => $gas_inv->id,
+    percentage => 0.00, amount => 0.00 });
+$schema->resultset('UtilityCalculationDetail')->create({ calculation_id => $calc->id,
+    tenant_id => $tenant->id, utility_type => 'water', received_invoice_id => $water_inv->id,
+    percentage => 20.00, amount => 376.72 });
+
+subtest 'finalize recomputes metered details to the meter-based amounts' => sub {
+    plan tests => 5;
+
+    my $res = TestHelper::auth_post($test, '/api/utility-calculations/' . $calc->id . '/finalize', {});
+    is($res->code, 200, 'finalize OK');
+
+    my $gas_d = $schema->resultset('UtilityCalculationDetail')->search({
+        calculation_id => $calc->id, tenant_id => $tenant->id, utility_type => 'gas' })->first;
+    my $water_d = $schema->resultset('UtilityCalculationDetail')->search({
+        calculation_id => $calc->id, tenant_id => $tenant->id, utility_type => 'water' })->first;
+
+    is(sprintf('%.2f', $gas_d->amount),   '22.63',  'gas amount is meter-based (4.3/57 * 300)');
+    is(sprintf('%.2f', $gas_d->percentage), '7.54', 'gas percentage is meter-based');
+    is(sprintf('%.2f', $water_d->amount), '181.68', 'water amount is meter-based (rain + consum)');
+    is(sprintf('%.2f', $water_d->percentage), '9.65', 'water effective percentage');
+};
+
+done_testing;
+```
+
+- [ ] **Step 2: Run the test to confirm it fails**
+
+Run: `docker compose run --rm -T backend prove -l t/integration/06_metered_finalize.t`
+Expected: FAIL — finalize does not recompute, so gas amount stays `0.00` (and water `376.72`), not `22.63`/`181.68`.
+
+- [ ] **Step 3: Add `strict` to `_resolve_tenant_share`**
+
+In `backend/lib/PropertyManager/Services/UtilityCalculator.pm`, in `_resolve_tenant_share`, read the flag and make the three data-missing `die`s conditional. Change the signature/args extraction to include `strict`, and replace the three guards:
+
+```perl
+    my ($tenant_id, $utility_type, $invoice, $year, $month, $calculation_id, $strict) =
+        @args{qw(tenant_id utility_type invoice year month calculation_id strict)};
+```
+
+Then replace the guard blocks (metered branch) so each yields 0 when not strict:
+
+```perl
+    my $inputs = $self->{schema}->resultset('MeteredCalculationInput')->search({
+        calculation_id => $calculation_id,
+        utility_type   => $utility_type,
+    })->first;
+
+    unless ($inputs) {
+        die "Missing metered inputs for $utility_type in calculation $calculation_id\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
+
+    my $reading_rs = $utility_type eq 'gas' ? 'GasReading' : 'WaterReading';
+    my $reading = $self->{schema}->resultset($reading_rs)->search({
+        tenant_id    => $tenant_id,
+        period_year  => $year,
+        period_month => $month,
+    })->first;
+
+    unless ($reading) {
+        die "Missing $utility_type reading for tenant $tenant_id / $year-$month\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
+
+    my $tenant_units = defined $reading->consumption
+        ? $reading->consumption
+        : ($reading->reading_value - ($reading->previous_reading_value // 0));
+
+    my $total_units = $inputs->total_units;
+    unless ($total_units > 0) {
+        die "total_units must be > 0 for metered $utility_type\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
+```
+
+Leave the rest of the metered math (gas ratio; water consumption/rain) unchanged.
+
+- [ ] **Step 4: Thread `strict` through `calculate_shares`**
+
+In `backend/lib/PropertyManager/Services/UtilityCalculator.pm`, in `calculate_shares`, read the flag near the top:
+
+```perl
+    my $strict = $params{strict} ? 1 : 0;
+```
+
+and pass it in the `_resolve_tenant_share` call (the `else` branch):
+
+```perl
+            } else {
+                $share = $self->_resolve_tenant_share(
+                    tenant_id      => $tenant_id,
+                    utility_type   => $utility_type,
+                    invoice        => $invoice,
+                    year           => $year,
+                    month          => $month,
+                    calculation_id => $calculation_id,
+                    strict         => $strict,
+                );
+            }
+```
+
+- [ ] **Step 5: Add `recompute_metered_details` to the calculator**
+
+In `backend/lib/PropertyManager/Services/UtilityCalculator.pm`, add this public method (e.g. just before the final `1;` of the package body, after `get_invoices_for_period`):
+
+```perl
+=head2 recompute_metered_details
+
+Recompute and upsert ONLY the metered (gas/water uses_meter) UtilityCalculationDetail
+rows for a calculation, using strict resolution (dies on missing reading/inputs).
+Non-metered details are left untouched so ad-hoc percentage overrides survive.
+
+=cut
+
+sub recompute_metered_details {
+    my ($self, $calculation_id) = @_;
+    my $schema = $self->{schema};
+
+    my $calc = $schema->resultset('UtilityCalculation')->find($calculation_id)
+        or die "Calculation $calculation_id not found\n";
+    my $year  = $calc->period_year;
+    my $month = $calc->period_month;
+
+    my @tenants = $schema->resultset('Tenant')->search({ is_active => 1 })->all;
+    foreach my $tenant (@tenants) {
+        foreach my $ut (qw(gas water)) {
+            my $up = $schema->resultset('TenantUtilityPercentage')->search({
+                tenant_id => $tenant->id, utility_type => $ut,
+            })->first;
+            next unless $up && $up->uses_meter;
+
+            my $mci = $schema->resultset('MeteredCalculationInput')->search({
+                calculation_id => $calculation_id, utility_type => $ut,
+            })->first;
+            die "Missing metered inputs for $ut in calculation $calculation_id\n" unless $mci;
+
+            my $invoice = $schema->resultset('ReceivedInvoice')->find($mci->received_invoice_id)
+                or die "Metered input for $ut references a missing invoice\n";
+
+            my $share = $self->_resolve_tenant_share(
+                tenant_id      => $tenant->id,
+                utility_type   => $ut,
+                invoice        => $invoice,
+                year           => $year,
+                month          => $month,
+                calculation_id => $calculation_id,
+                strict         => 1,
+            );
+
+            my %vals = (
+                received_invoice_id => $invoice->id,
+                percentage          => sprintf('%.2f', $share->{percentage}),
+                amount              => sprintf('%.2f', $share->{amount}),
+            );
+
+            my $detail = $schema->resultset('UtilityCalculationDetail')->search({
+                calculation_id => $calculation_id,
+                tenant_id      => $tenant->id,
+                utility_type   => $ut,
+            })->first;
+
+            if ($detail) {
+                $detail->update(\%vals);
+            } else {
+                $schema->resultset('UtilityCalculationDetail')->create({
+                    calculation_id => $calculation_id,
+                    tenant_id      => $tenant->id,
+                    utility_type   => $ut,
+                    %vals,
+                });
+            }
+        }
+    }
+    return 1;
+}
+```
+
+- [ ] **Step 6: Make `finalize` recompute metered details**
+
+In `backend/lib/PropertyManager/Routes/UtilityCalculations.pm`, replace the body of `post '/:id/finalize'` after the `is_finalized` 409 check (the `$calc->update({...})` block) with a recompute wrapped in a transaction:
+
+```perl
+    my ($error, $missing_data);
+    try {
+        schema->txn_do(sub {
+            $calculator->recompute_metered_details($calc->id);
+            $calc->update({
+                is_finalized => 1,
+                finalized_at => DateTime->now,
+            });
+        });
+    } catch {
+        $error = $_;
+        $missing_data = ($error =~ /Missing|references a missing|must be > 0/);
+        error("Failed to finalize calculation: $error");
+    };
+
+    if ($error) {
+        status($missing_data ? 422 : 500);
+        return { success => 0, error => "$error" };
+    }
+
+    return { success => 1, data => { calculation => { $calc->get_columns } } };
+```
+
+Ensure `$calculator` is the same service instance used by the `POST ''` route (it is a module-level `my $calculator = ...` in this file — reuse it; do not create a new one).
+
+- [ ] **Step 7: Run the integration test (GREEN) + metered regressions**
+
+Run:
+```bash
+docker compose run --rm -T backend prove -l t/integration/06_metered_finalize.t t/unit/07_metered_utility_calculator.t t/unit/08_invoice_generator_metered_breakdown.t t/integration/05_metered_inputs.t
+```
+Expected: PASS on all. (07 calls `calculate_shares` without `strict`, so the non-fatal path must not change its existing assertions.)
+
+- [ ] **Step 8: Frontend — exclude metered pairs from the overrides payload**
+
+In `frontend/src/pages/UtilityCalculations.jsx`, add a helper near `handleSaveCalculation` (before it):
+
+```jsx
+  // Build the overrides payload for create/finalize, EXCLUDING metered
+  // (tenant, gas|water) pairs so the backend computes those from meters
+  // instead of a flat percentage.
+  const buildSaveOverrides = () => {
+    const out = {};
+    activeTenants.forEach((tenant) => {
+      const perUtil = {};
+      UTILITY_TYPE_OPTIONS.forEach((option) => {
+        const ut = option.value;
+        const up = (tenant.utility_percentages || []).find((x) => x.utility_type === ut);
+        if (up && up.uses_meter && (ut === 'gas' || ut === 'water')) return; // metered → backend computes
+        perUtil[ut] = tenantPercentages[tenant.id]?.[ut] || 0;
+      });
+      out[tenant.id] = perUtil;
+    });
+    return out;
+  };
+```
+
+Then use it in `handleSaveCalculation`:
+
+```jsx
+  const handleSaveCalculation = () => {
+    createMutation.mutate({
+      period_year: selectedYear,
+      period_month: selectedMonth,
+      overrides: buildSaveOverrides(),
+    });
+  };
+```
+
+and in `ensureCalculation` (replace `overrides: tenantPercentages` with `overrides: buildSaveOverrides()`):
+
+```jsx
+    const res = await createMutation.mutateAsync({
+      period_year: selectedYear,
+      period_month: selectedMonth,
+      overrides: buildSaveOverrides(),
+    });
+```
+
+- [ ] **Step 9: Frontend gates**
+
+Run: `cd frontend && npm run lint && npm run build`
+Expected: no new lint errors for `UtilityCalculations.jsx`; build succeeds.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add backend/lib/PropertyManager/Services/UtilityCalculator.pm backend/lib/PropertyManager/Routes/UtilityCalculations.pm frontend/src/pages/UtilityCalculations.jsx backend/t/integration/06_metered_finalize.t
+git commit -m "fix: metered amounts persist to finalized calculation and invoice"
+```
