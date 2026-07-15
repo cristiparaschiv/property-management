@@ -6,6 +6,11 @@ export const waterReadingsService = {
     return response.data;
   },
 
+  getByPeriod: async (year, month) => {
+    const response = await api.get('/water-readings', { params: { year, month } });
+    return response.data;
+  },
+
   getById: async (id) => {
     const response = await api.get(`/water-readings/${id}`);
     return response.data;

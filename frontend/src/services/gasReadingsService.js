@@ -6,6 +6,11 @@ export const gasReadingsService = {
     return response.data;
   },
 
+  getByPeriod: async (year, month) => {
+    const response = await api.get('/gas-readings', { params: { year, month } });
+    return response.data;
+  },
+
   getById: async (id) => {
     const response = await api.get(`/gas-readings/${id}`);
     return response.data;
