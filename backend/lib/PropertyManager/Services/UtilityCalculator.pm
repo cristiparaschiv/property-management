@@ -47,6 +47,7 @@ sub calculate_shares {
     my $year = $params{year};
     my $month = $params{month};
     my $overrides = $params{overrides} || {};
+    my $strict = $params{strict} ? 1 : 0;
 
     die "year and month are required" unless defined $year && defined $month;
 
@@ -101,6 +102,7 @@ sub calculate_shares {
                     year           => $year,
                     month          => $month,
                     calculation_id => $calculation_id,
+                    strict         => $strict,
                 );
             }
 
@@ -263,8 +265,8 @@ Metered gas/water dispatches on meter readings and metered_calculation_inputs.
 
 sub _resolve_tenant_share {
     my ($self, %args) = @_;
-    my ($tenant_id, $utility_type, $invoice, $year, $month, $calculation_id) =
-        @args{qw(tenant_id utility_type invoice year month calculation_id)};
+    my ($tenant_id, $utility_type, $invoice, $year, $month, $calculation_id, $strict) =
+        @args{qw(tenant_id utility_type invoice year month calculation_id strict)};
 
     my $pct_record = $self->{schema}->resultset('TenantUtilityPercentage')->search(
         { tenant_id => $tenant_id, utility_type => $utility_type }
@@ -286,8 +288,10 @@ sub _resolve_tenant_share {
         utility_type   => $utility_type,
     })->first;
 
-    die "Missing metered inputs for $utility_type in calculation $calculation_id"
-        unless $inputs;
+    unless ($inputs) {
+        die "Missing metered inputs for $utility_type in calculation $calculation_id\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
 
     my $reading_rs = $utility_type eq 'gas' ? 'GasReading' : 'WaterReading';
     my $reading = $self->{schema}->resultset($reading_rs)->search({
@@ -296,15 +300,20 @@ sub _resolve_tenant_share {
         period_month => $month,
     })->first;
 
-    die "Missing $utility_type reading for tenant $tenant_id / $year-$month"
-        unless $reading;
+    unless ($reading) {
+        die "Missing $utility_type reading for tenant $tenant_id / $year-$month\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
 
     my $tenant_units = defined $reading->consumption
         ? $reading->consumption
         : ($reading->reading_value - ($reading->previous_reading_value // 0));
 
     my $total_units = $inputs->total_units;
-    die "total_units must be > 0 for metered $utility_type" unless $total_units > 0;
+    unless ($total_units > 0) {
+        die "total_units must be > 0 for metered $utility_type\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
 
     if ($utility_type eq 'gas') {
         my $ratio  = $tenant_units / $total_units;
@@ -330,6 +339,76 @@ sub _resolve_tenant_share {
         percentage => $effective_pct,
         amount     => $amount,
     };
+}
+
+=head2 recompute_metered_details
+
+Recompute and upsert ONLY the metered (gas/water uses_meter) UtilityCalculationDetail
+rows for a calculation, using strict resolution (dies on missing reading/inputs).
+Non-metered details are left untouched so ad-hoc percentage overrides survive.
+
+=cut
+
+sub recompute_metered_details {
+    my ($self, $calculation_id) = @_;
+    my $schema = $self->{schema};
+
+    my $calc = $schema->resultset('UtilityCalculation')->find($calculation_id)
+        or die "Calculation $calculation_id not found\n";
+    my $year  = $calc->period_year;
+    my $month = $calc->period_month;
+
+    my @tenants = $schema->resultset('Tenant')->search({ is_active => 1 })->all;
+    foreach my $tenant (@tenants) {
+        foreach my $ut (qw(gas water)) {
+            my $up = $schema->resultset('TenantUtilityPercentage')->search({
+                tenant_id => $tenant->id, utility_type => $ut,
+            })->first;
+            next unless $up && $up->uses_meter;
+
+            my $mci = $schema->resultset('MeteredCalculationInput')->search({
+                calculation_id => $calculation_id, utility_type => $ut,
+            })->first;
+            die "Missing metered inputs for $ut in calculation $calculation_id\n" unless $mci;
+
+            my $invoice = $schema->resultset('ReceivedInvoice')->find($mci->received_invoice_id)
+                or die "Metered input for $ut references a missing invoice\n";
+
+            my $share = $self->_resolve_tenant_share(
+                tenant_id      => $tenant->id,
+                utility_type   => $ut,
+                invoice        => $invoice,
+                year           => $year,
+                month          => $month,
+                calculation_id => $calculation_id,
+                strict         => 1,
+            );
+
+            my %vals = (
+                received_invoice_id => $invoice->id,
+                percentage          => sprintf('%.2f', $share->{percentage}),
+                amount              => sprintf('%.2f', $share->{amount}),
+            );
+
+            my $detail = $schema->resultset('UtilityCalculationDetail')->search({
+                calculation_id => $calculation_id,
+                tenant_id      => $tenant->id,
+                utility_type   => $ut,
+            })->first;
+
+            if ($detail) {
+                $detail->update(\%vals);
+            } else {
+                $schema->resultset('UtilityCalculationDetail')->create({
+                    calculation_id => $calculation_id,
+                    tenant_id      => $tenant->id,
+                    utility_type   => $ut,
+                    %vals,
+                });
+            }
+        }
+    }
+    return 1;
 }
 
 1;

@@ -212,11 +212,29 @@ const UtilityCalculations = () => {
     });
   };
 
+  // Build the overrides payload for create/finalize, EXCLUDING metered
+  // (tenant, gas|water) pairs so the backend computes those from meters
+  // instead of a flat percentage.
+  const buildSaveOverrides = () => {
+    const out = {};
+    activeTenants.forEach((tenant) => {
+      const perUtil = {};
+      UTILITY_TYPE_OPTIONS.forEach((option) => {
+        const ut = option.value;
+        const up = (tenant.utility_percentages || []).find((x) => x.utility_type === ut);
+        if (up && up.uses_meter && (ut === 'gas' || ut === 'water')) return; // metered → backend computes
+        perUtil[ut] = tenantPercentages[tenant.id]?.[ut] || 0;
+      });
+      out[tenant.id] = perUtil;
+    });
+    return out;
+  };
+
   const handleSaveCalculation = () => {
     createMutation.mutate({
       period_year: selectedYear,
       period_month: selectedMonth,
-      overrides: tenantPercentages,
+      overrides: buildSaveOverrides(),
     });
   };
 
@@ -473,7 +491,7 @@ const UtilityCalculations = () => {
     const res = await createMutation.mutateAsync({
       period_year: selectedYear,
       period_month: selectedMonth,
-      overrides: tenantPercentages,
+      overrides: buildSaveOverrides(),
     });
     // POST /api/utility-calculations intoarce
     //   { success, data: { calculation: { id, ...columns } } }

@@ -217,10 +217,25 @@ post '/:id/finalize' => sub {
         return { success => 0, error => 'Calculation is already finalized' };
     }
 
-    $calc->update({
-        is_finalized => 1,
-        finalized_at => DateTime->now,
-    });
+    my ($error, $missing_data);
+    try {
+        schema->txn_do(sub {
+            $calculator->recompute_metered_details($calc->id);
+            $calc->update({
+                is_finalized => 1,
+                finalized_at => DateTime->now,
+            });
+        });
+    } catch {
+        $error = $_;
+        $missing_data = ($error =~ /Missing|references a missing|must be > 0/);
+        error("Failed to finalize calculation: $error");
+    };
+
+    if ($error) {
+        status($missing_data ? 422 : 500);
+        return { success => 0, error => "$error" };
+    }
 
     return { success => 1, data => { calculation => { $calc->get_columns } } };
 };

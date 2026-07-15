@@ -212,7 +212,7 @@ subtest 'missing metered inputs blocks finalization' => sub {
     )->delete;
 
     my $calc = PropertyManager::Services::UtilityCalculator->new(schema => $schema);
-    eval { $calc->calculate_shares(year => 2026, month => 4); };
+    eval { $calc->calculate_shares(year => 2026, month => 4, strict => 1); };
     like($@, qr/metered/i, 'Missing metered inputs raises error mentioning metered');
 };
 
@@ -223,7 +223,7 @@ subtest 'missing tenant reading blocks finalization' => sub {
     $schema->resultset('GasReading')->search({ tenant_id => $f->{tenant_b}->id })->delete;
 
     my $calc = PropertyManager::Services::UtilityCalculator->new(schema => $schema);
-    eval { $calc->calculate_shares(year => 2026, month => 4); };
+    eval { $calc->calculate_shares(year => 2026, month => 4, strict => 1); };
     like($@, qr/reading/i, 'Missing reading raises error mentioning reading');
 };
 
