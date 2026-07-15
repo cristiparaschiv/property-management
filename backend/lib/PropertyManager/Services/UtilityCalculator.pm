@@ -281,7 +281,10 @@ sub _resolve_tenant_share {
         return { percentage => $fixed_pct, amount => $amount };
     }
 
-    die "calculation_id required for metered billing" unless $calculation_id;
+    unless ($calculation_id) {
+        die "calculation_id required for metered billing\n" if $strict;
+        return { percentage => 0, amount => 0 };
+    }
 
     my $inputs = $self->{schema}->resultset('MeteredCalculationInput')->search({
         calculation_id => $calculation_id,

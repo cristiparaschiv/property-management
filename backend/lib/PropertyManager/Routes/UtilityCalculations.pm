@@ -149,21 +149,32 @@ post '' => sub {
                 die "Calculation for this period is already finalized\n";
             }
 
-            $existing->delete if $existing;
+            # Reuse an existing (non-finalized) calculation row so its metered
+            # inputs (metered_calculation_inputs, FK ON DELETE CASCADE) survive
+            # a re-save; only its details are refreshed. The row must exist
+            # BEFORE calculate_shares so the metered branch has a calculation_id
+            # to resolve meter-based shares against.
+            my $calculation;
+            if ($existing) {
+                $calculation = $existing;
+                schema->resultset('UtilityCalculationDetail')
+                    ->search({ calculation_id => $calculation->id })->delete;
+            } else {
+                $calculation = schema->resultset('UtilityCalculation')->create({
+                    period_year => $year,
+                    period_month => $month,
+                    is_finalized => 0,
+                });
+            }
 
-            # Calculate shares
+            # Calculate shares. calculation_id lets the metered branch look up
+            # its inputs; missing inputs are non-fatal for a draft (strict off).
             my $calc_result = $calculator->calculate_shares(
-                year => $year,
-                month => $month,
-                overrides => $overrides,
+                year           => $year,
+                month          => $month,
+                calculation_id => $calculation->id,
+                overrides      => $overrides,
             );
-
-            # Create calculation record
-            my $calculation = schema->resultset('UtilityCalculation')->create({
-                period_year => $year,
-                period_month => $month,
-                is_finalized => 0,
-            });
 
             # Create details
             foreach my $tenant_share (@{$calc_result->{tenant_shares}}) {
