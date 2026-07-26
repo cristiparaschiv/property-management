@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # Gate: ESLint exits non-zero on any error (warnings are advisory).
+      - run: npm run lint
+      - run: npm run build
+      # Pure metered-calculation unit tests (no browser / DB needed).
+      - run: node --test src/utils/meteredCalc.test.js
+
+  backend:
+    name: Backend (perl tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker compose build backend
+      - name: Start database
+        run: |
+          docker compose up -d db
+          for i in $(seq 1 30); do
+            if docker exec property-db mariadb-admin ping -uroot -p"${DB_ROOT_PASSWORD:-rootpassword}" --silent >/dev/null 2>&1; then
+              echo "db ready"; break
+            fi
+            sleep 3
+          done
+      - name: Run test suite
+        run: >
+          docker compose run --rm -T backend
+          prove -l
+          t/integration/03_tenants.t
+          t/integration/05_metered_inputs.t
+          t/integration/06_metered_finalize.t
+          t/integration/07_metered_create.t
+          t/integration/08_electricity_with_metered.t
+          t/unit/03_utility_calculator.t
+          t/unit/07_metered_utility_calculator.t
+          t/unit/08_invoice_generator_metered_breakdown.t
+          t/unit/09_backup_excludes_history.t

@@ -4,7 +4,7 @@
  */
 
 import { theme as antdTheme } from 'antd';
-import { colors, borderRadius, typography } from './tokens';
+import { colors, typography } from './tokens';
 
 /**
  * Creates the Ant Design theme configuration based on dark mode state

@@ -147,7 +147,7 @@ const Invoices = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
+    } catch {
       message.error('Eroare la descărcarea PDF-ului');
     }
   };

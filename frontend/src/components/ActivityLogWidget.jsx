@@ -16,7 +16,6 @@ import {
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { activityLogsService } from '../services/activityLogsService';
-import { formatDate } from '../utils/formatters';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ro';

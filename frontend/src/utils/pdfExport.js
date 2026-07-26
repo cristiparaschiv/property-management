@@ -275,10 +275,6 @@ export const exportTenantStatementPDF = async (data) => {
   const { doc, fontFamily } = await initPdfDoc();
   const { margin, colors } = PDF_CONFIG;
 
-  const periodText = data.period?.start_date && data.period?.end_date
-    ? `${formatDate(data.period.start_date)} - ${formatDate(data.period.end_date)}`
-    : 'Toate tranzacțiile';
-
   let currentY = addHeader(doc, 'Extras de Cont', data.tenant?.name || '', fontFamily);
 
   // Tenant info

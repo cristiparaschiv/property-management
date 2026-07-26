@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Table,
   Button,
@@ -23,7 +23,6 @@ import { meterReadingsService } from '../services/meterReadingsService';
 import { metersService } from '../services/metersService';
 import { formatDate, formatNumber, getMonthName } from '../utils/formatters';
 import BatchMeterReadingForm from '../components/BatchMeterReadingForm';
-import dayjs from 'dayjs';
 
 const { Option } = Select;
 
@@ -32,7 +31,6 @@ const MeterReadings = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMeterId, setSelectedMeterId] = useState(null);
-  const [previousReading, setPreviousReading] = useState(null);
   const [calculatedConsumption, setCalculatedConsumption] = useState(null);
 
   const { data: readingsData, isLoading } = useQuery({
@@ -58,24 +56,15 @@ const MeterReadings = () => {
     },
   });
 
-  // Effect to fetch previous reading when meter is selected
-  useEffect(() => {
-    if (selectedMeterId && readingsData?.data) {
-      const meterReadings = readingsData.data.filter(r => r.meter_id === selectedMeterId);
-      if (meterReadings.length > 0) {
-        // Get the most recent reading for this meter
-        const sortedReadings = [...meterReadings].sort((a, b) => {
-          const dateA = new Date(a.reading_date);
-          const dateB = new Date(b.reading_date);
-          return dateB - dateA;
-        });
-        setPreviousReading(sortedReadings[0]);
-      } else {
-        setPreviousReading(null);
-      }
-    } else {
-      setPreviousReading(null);
-    }
+  // Most recent existing reading for the selected meter — derived, not stored,
+  // so it can never drift out of sync with the selection or fetched data.
+  const previousReading = useMemo(() => {
+    if (!selectedMeterId || !readingsData?.data) return null;
+    const meterReadings = readingsData.data.filter(r => r.meter_id === selectedMeterId);
+    if (meterReadings.length === 0) return null;
+    return [...meterReadings].sort(
+      (a, b) => new Date(b.reading_date) - new Date(a.reading_date)
+    )[0];
   }, [selectedMeterId, readingsData]);
 
   // Removed this useEffect as it was causing the warning about Form instance not being connected.
@@ -84,7 +73,6 @@ const MeterReadings = () => {
   const showCreateModal = () => {
     form.resetFields();
     setSelectedMeterId(null);
-    setPreviousReading(null);
     setCalculatedConsumption(null);
     setIsModalOpen(true);
   };
@@ -214,7 +202,6 @@ const MeterReadings = () => {
           setIsModalOpen(false);
           form.resetFields();
           setSelectedMeterId(null);
-          setPreviousReading(null);
           setCalculatedConsumption(null);
         }}
         width={700}

@@ -48,6 +48,47 @@ import '../styles/components/cards.css';
 
 const { Title } = Typography;
 
+// Recharts tooltip renderers. Defined at module scope (not inside Dashboard)
+// so they are stable component identities and are not recreated every render.
+const CustomChartTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="pm-chart-tooltip">
+        <p className="pm-chart-tooltip__label">{label}</p>
+        {payload.map((entry, index) => (
+          <div key={index} className="pm-chart-tooltip__item">
+            <span
+              className="pm-chart-tooltip__dot"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span>{entry.name}: {formatCurrency(entry.value)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomPieTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="pm-chart-tooltip">
+        <p className="pm-chart-tooltip__label">{payload[0].name}</p>
+        <div className="pm-chart-tooltip__item">
+          <span>Număr: {payload[0].value}</span>
+        </div>
+        {payload[0].payload.amount !== undefined && (
+          <div className="pm-chart-tooltip__item">
+            <span>Sumă: {formatCurrency(payload[0].payload.amount)}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 const Dashboard = () => {
   const { isDarkMode, chartColors } = useTheme();
 
@@ -354,47 +395,6 @@ const Dashboard = () => {
       align: 'center',
     },
   ];
-
-  // Custom tooltip component
-  const CustomChartTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="pm-chart-tooltip">
-          <p className="pm-chart-tooltip__label">{label}</p>
-          {payload.map((entry, index) => (
-            <div key={index} className="pm-chart-tooltip__item">
-              <span
-                className="pm-chart-tooltip__dot"
-                style={{ backgroundColor: entry.color }}
-              />
-              <span>{entry.name}: {formatCurrency(entry.value)}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Custom pie tooltip
-  const CustomPieTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="pm-chart-tooltip">
-          <p className="pm-chart-tooltip__label">{payload[0].name}</p>
-          <div className="pm-chart-tooltip__item">
-            <span>Număr: {payload[0].value}</span>
-          </div>
-          {payload[0].payload.amount !== undefined && (
-            <div className="pm-chart-tooltip__item">
-              <span>Sumă: {formatCurrency(payload[0].payload.amount)}</span>
-            </div>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
 
   const companyBalance = parseFloat(summary.company_balance || 0);
   const unpaidCount = summary.unpaid_invoices?.count || 0;

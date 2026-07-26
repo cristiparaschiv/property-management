@@ -1,3 +1,7 @@
+/* eslint-disable react-refresh/only-export-components --
+   Idiomatic context-plus-hook colocation (ThemeProvider + useTheme). Only
+   affects Fast Refresh granularity in dev, not runtime; splitting the hook out
+   would churn every import site for no functional gain. */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { colors, lightTheme, darkTheme, chartColors } from '../styles/theme/tokens';
 

@@ -4,7 +4,6 @@ import {
   Modal,
   Form,
   Input,
-  InputNumber,
   Select,
   DatePicker,
   message,
@@ -13,6 +12,7 @@ import {
   Dropdown,
   Tooltip,
 } from 'antd';
+import MoneyInput from '../components/ui/MoneyInput';
 import {
   PlusOutlined,
   EditOutlined,
@@ -483,7 +483,7 @@ const ReceivedInvoices = () => {
             name="amount"
             rules={[{ required: true, message: 'Suma este obligatorie' }]}
           >
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <MoneyInput />
           </Form.Item>
 
           <Form.Item

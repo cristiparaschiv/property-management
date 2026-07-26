@@ -43,6 +43,7 @@ import { meteredInputsService } from '../services/meteredInputsService';
 import { gasReadingsService } from '../services/gasReadingsService';
 import { waterReadingsService } from '../services/waterReadingsService';
 import { computeGasShare, computeWaterShare } from '../utils/meteredCalc';
+import MoneyInput from '../components/ui/MoneyInput';
 import { formatCurrency, formatNumber, getMonthName } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
 import {
@@ -510,7 +511,7 @@ const UtilityCalculations = () => {
         received_invoice_id: values.received_invoice_id,
         total_units: values.total_units,
       });
-    } catch (_) { /* validation */ }
+    } catch { /* validation */ }
   };
 
   const handleSaveWaterMeteredInput = async () => {
@@ -525,7 +526,7 @@ const UtilityCalculations = () => {
         total_units: values.total_units,
         rain_amount: values.rain_amount,
       });
-    } catch (_) { /* validation */ }
+    } catch { /* validation */ }
   };
 
   const checkMeteredInputsBeforeFinalize = (calc) => {
@@ -1167,13 +1168,15 @@ const UtilityCalculations = () => {
                                       <InputNumber
                                         min={0}
                                         max={100}
+                                        decimalSeparator=","
+                                        precision={2}
                                         value={
                                           tenantPercentages[tenant.id]?.[option.value] || 0
                                         }
                                         onChange={(val) =>
                                           handlePercentageChange(tenant.id, option.value, val)
                                         }
-                                        style={{ width: 70 }}
+                                        style={{ width: 80 }}
                                         size="small"
                                       />
                                       <Text type="secondary">%</Text>
@@ -1309,7 +1312,7 @@ const UtilityCalculations = () => {
                   name="total_units"
                   rules={[{ required: true, message: 'Introduceți total m³' }]}
                 >
-                  <InputNumber min={0} step={0.01} style={{ width: 140 }} />
+                  <InputNumber min={0} step={0.01} decimalSeparator="," precision={2} style={{ width: 140 }} />
                 </Form.Item>
                 <Form.Item>
                   <Button
@@ -1359,14 +1362,14 @@ const UtilityCalculations = () => {
                   name="total_units"
                   rules={[{ required: true, message: 'Introduceți total m³' }]}
                 >
-                  <InputNumber min={0} step={0.01} style={{ width: 120 }} />
+                  <InputNumber min={0} step={0.01} decimalSeparator="," precision={2} style={{ width: 120 }} />
                 </Form.Item>
                 <Form.Item
                   label="Cost apă pluvială (RON)"
                   name="rain_amount"
                   rules={[{ required: true, message: 'Introduceți costul apei pluviale' }]}
                 >
-                  <InputNumber min={0} step={0.01} style={{ width: 140 }} />
+                  <MoneyInput style={{ width: 140 }} />
                 </Form.Item>
                 <Form.Item
                   noStyle

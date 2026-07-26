@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Menu, Button, Dropdown, Avatar, Input, Tooltip } from 'antd';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { useQuery } from '@tanstack/react-query';
 import {
   DashboardOutlined,
@@ -35,12 +36,10 @@ import '../styles/components/layout.css';
 const { Header, Sider, Content } = Layout;
 
 const MOBILE_BREAKPOINT = 768;
-const TABLET_BREAKPOINT = 992;
 
 const MainLayout = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth <= MOBILE_BREAKPOINT);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
-  const [isTablet, setIsTablet] = useState(window.innerWidth <= TABLET_BREAKPOINT && window.innerWidth > MOBILE_BREAKPOINT);
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -51,40 +50,23 @@ const MainLayout = () => {
   const { isDarkMode, toggleTheme } = useTheme();
   const searchContainerRef = useRef(null);
 
-  // Detect mobile/tablet viewport
+  // Detect mobile viewport and auto-collapse/expand across the breakpoint.
+  // State changes happen in the resize event handler (not the effect body),
+  // so this never triggers cascading renders.
   useEffect(() => {
     const handleResize = () => {
-      const width = window.innerWidth;
-      const wasMobile = isMobile;
-      const newIsMobile = width <= MOBILE_BREAKPOINT;
-      const newIsTablet = width <= TABLET_BREAKPOINT && width > MOBILE_BREAKPOINT;
-
-      setIsMobile(newIsMobile);
-      setIsTablet(newIsTablet);
-
-      // Auto-collapse on mobile, expand on desktop
-      if (newIsMobile && !wasMobile) {
-        setCollapsed(true);
-      } else if (!newIsMobile && wasMobile) {
-        setCollapsed(false);
-      }
+      const newIsMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      setIsMobile((wasMobile) => {
+        if (newIsMobile !== wasMobile) {
+          setCollapsed(newIsMobile);
+        }
+        return newIsMobile;
+      });
     };
-
-    // Initial check
-    if (isMobile) {
-      setCollapsed(true);
-    }
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isMobile]);
-
-  // Close sidebar when navigating on mobile
-  useEffect(() => {
-    if (isMobile && !collapsed) {
-      setCollapsed(true);
-    }
-  }, [location.pathname]);
+  }, []);
 
   // Debounce search input
   useEffect(() => {
@@ -104,15 +86,6 @@ const MainLayout = () => {
     enabled: debouncedSearchValue.length >= 2,
     staleTime: 5000,
   });
-
-  // Show/hide dropdown based on search value
-  useEffect(() => {
-    if (searchValue.length > 0) {
-      setShowSearchDropdown(true);
-    } else {
-      setShowSearchDropdown(false);
-    }
-  }, [searchValue]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -144,7 +117,9 @@ const MainLayout = () => {
   }, []);
 
   const handleSearchChange = (e) => {
-    setSearchValue(e.target.value);
+    const value = e.target.value;
+    setSearchValue(value);
+    setShowSearchDropdown(value.length > 0);
   };
 
   const handleCloseDropdown = () => {
@@ -370,7 +345,9 @@ const MainLayout = () => {
           </div>
         </Header>
         <Content className="pm-content">
-          <Outlet />
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </Content>
       </Layout>
       <ChangePasswordModal
