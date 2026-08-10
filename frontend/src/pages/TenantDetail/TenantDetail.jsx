@@ -1,9 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Spin, Result, Button, Card, Descriptions, Row, Col, Statistic, Tag, Tabs } from 'antd';
+import { Spin, Result, Button, Card, Descriptions, Row, Col, Statistic, Tag, Tabs, Table } from 'antd';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { tenantsService } from '../../services/tenantsService';
-import { formatCurrency } from '../../utils/formatters';
+import { invoicesService } from '../../services/invoicesService';
+import { dashboardService } from '../../services/dashboardService';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import TenantCharts from './TenantCharts';
 
 const TenantDetail = () => {
@@ -15,6 +17,19 @@ const TenantDetail = () => {
     queryFn: () => tenantsService.getOverview(id),
     enabled: !!id,
   });
+
+  const { data: invoicesData } = useQuery({
+    queryKey: ['tenant-invoices', id],
+    queryFn: () => invoicesService.getAll(id),
+    enabled: !!id,
+  });
+  const { data: statementData } = useQuery({
+    queryKey: ['tenant-statement', id],
+    queryFn: () => dashboardService.getTenantStatement(id),
+    enabled: !!id,
+  });
+  const invoices = invoicesData?.data || [];
+  const ledger = statementData?.data?.transactions || [];
 
   if (isLoading) return <Spin style={{ display: 'block', margin: '80px auto' }} />;
   if (isError || !data?.data) {
@@ -88,8 +103,39 @@ const TenantDetail = () => {
       <Tabs
         style={{ marginTop: 16 }}
         items={[
-          { key: 'invoices', label: 'Facturi', children: <div /> },
-          { key: 'statement', label: 'Fișă cont', children: <div /> },
+          {
+            key: 'invoices', label: 'Facturi',
+            children: (
+              <Table
+                rowKey="id" size="small" pagination={{ pageSize: 10 }} dataSource={invoices}
+                columns={[
+                  { title: 'Număr', dataIndex: 'invoice_number' },
+                  { title: 'Tip', dataIndex: 'invoice_type' },
+                  { title: 'Data', dataIndex: 'invoice_date', render: (d) => formatDate(d) },
+                  { title: 'Total', dataIndex: 'total_ron', align: 'right', render: (v) => formatCurrency(v) },
+                  {
+                    title: 'Stare', dataIndex: 'is_paid',
+                    render: (p) => <Tag color={p ? 'green' : 'red'}>{p ? 'Plătită' : 'Neplătită'}</Tag>,
+                  },
+                ]}
+              />
+            ),
+          },
+          {
+            key: 'statement', label: 'Fișă cont',
+            children: (
+              <Table
+                rowKey={(r, i) => i} size="small" pagination={false} dataSource={ledger}
+                columns={[
+                  { title: 'Data', dataIndex: 'date', render: (d) => formatDate(d) },
+                  { title: 'Descriere', dataIndex: 'description' },
+                  { title: 'Debit', dataIndex: 'debit', align: 'right' },
+                  { title: 'Credit', dataIndex: 'credit', align: 'right' },
+                  { title: 'Sold', dataIndex: 'balance', align: 'right' },
+                ]}
+              />
+            ),
+          },
         ]}
       />
     </div>
