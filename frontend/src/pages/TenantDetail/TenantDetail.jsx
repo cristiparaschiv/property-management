@@ -28,7 +28,7 @@ const TenantDetail = () => {
     queryFn: () => dashboardService.getTenantStatement(id),
     enabled: !!id,
   });
-  const invoices = invoicesData?.data || [];
+  const invoices = invoicesData?.data?.invoices || [];
   const ledger = statementData?.data?.transactions || [];
 
   if (isLoading) return <Spin style={{ display: 'block', margin: '80px auto' }} />;
