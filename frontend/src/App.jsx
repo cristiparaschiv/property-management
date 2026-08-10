@@ -16,6 +16,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import CompanySettings from './pages/CompanySettings';
 import Tenants from './pages/Tenants';
+import TenantDetail from './pages/TenantDetail/TenantDetail';
 import UtilityProviders from './pages/UtilityProviders';
 import ReceivedInvoices from './pages/ReceivedInvoices';
 import Meters from './pages/Meters';
@@ -65,6 +66,7 @@ function AppContent() {
             <Route path="profile" element={<Profile />} />
             <Route path="company" element={<CompanySettings />} />
             <Route path="tenants" element={<Tenants />} />
+            <Route path="tenants/:id" element={<TenantDetail />} />
             <Route path="utility-providers" element={<UtilityProviders />} />
             <Route path="received-invoices" element={<ReceivedInvoices />} />
             <Route path="meters" element={<Meters />} />

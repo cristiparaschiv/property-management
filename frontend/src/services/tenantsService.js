@@ -13,6 +13,11 @@ export const tenantsService = {
     return response.data;
   },
 
+  getOverview: async (id) => {
+    const response = await api.get(`/tenants/${id}/overview`);
+    return response.data;
+  },
+
   create: async (data) => {
     const response = await api.post('/tenants', data);
     return response.data;

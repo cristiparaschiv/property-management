@@ -25,6 +25,7 @@ import {
   EuroOutlined,
   CalendarOutlined,
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tenantsService } from '../services/tenantsService';
 import { formatEuro } from '../utils/formatters';
@@ -45,6 +46,7 @@ import {
 } from '../components/ui/ListSummaryCards';
 
 const Tenants = () => {
+  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [percentagesForm] = Form.useForm();
   const queryClient = useQueryClient();
@@ -286,7 +288,7 @@ const Tenants = () => {
             <CardRow
               key={tenant.id}
               status={getRowStatus(tenant)}
-              onClick={() => showEditModal(tenant)}
+              onClick={() => navigate(`/tenants/${tenant.id}`)}
               actions={
                 <>
                   <ActionButton
