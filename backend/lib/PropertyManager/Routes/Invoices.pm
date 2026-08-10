@@ -512,9 +512,15 @@ post '/:id/items' => sub {
 
     my $data = request->data;
 
+    if ($invoice->is_paid) {
+        status 400;
+        return { success => 0, error => 'Nu se pot adăuga linii pe o factură plătită' };
+    }
+
     my ($item, $error);
     try {
-        $item = $invoice_gen->add_item(invoice_id => $invoice->id, %$data);
+        # Lines added here are manual corrections (deletable), never system lines.
+        $item = $invoice_gen->add_item(invoice_id => $invoice->id, %$data, is_manual => 1);
         $invoice_gen->calculate_totals($invoice->id);
     } catch {
         $error = $_;
@@ -526,7 +532,65 @@ post '/:id/items' => sub {
         return { success => 0, error => 'Failed to add item' };
     }
 
-    return { success => 1, data => { item => { $item->get_columns } } };
+    $invoice->discard_changes;
+    return { success => 1, data => {
+        item    => { $item->get_columns },
+        invoice => { $invoice->get_columns },
+    } };
+};
+
+=head2 DELETE /api/invoices/:id/items/:item_id
+
+Delete a manually-added line item and recompute totals. System-generated base
+lines (is_manual = 0) and lines on paid invoices cannot be deleted.
+
+=cut
+
+del '/:id/items/:item_id' => sub {
+    my $auth_error = require_auth();
+    return $auth_error if $auth_error;
+
+    my $csrf_error = require_csrf();
+    return $csrf_error if $csrf_error;
+
+    my $invoice = schema->resultset('Invoice')->find(route_parameters->get('id'));
+    unless ($invoice) {
+        status 404;
+        return { success => 0, error => 'Invoice not found' };
+    }
+
+    if ($invoice->is_paid) {
+        status 400;
+        return { success => 0, error => 'Nu se pot șterge linii de pe o factură plătită' };
+    }
+
+    my $item = schema->resultset('InvoiceItem')->find(route_parameters->get('item_id'));
+    unless ($item && $item->invoice_id == $invoice->id) {
+        status 404;
+        return { success => 0, error => 'Line item not found on this invoice' };
+    }
+
+    unless ($item->is_manual) {
+        status 403;
+        return { success => 0, error => 'Nu se poate șterge o linie de bază a facturii' };
+    }
+
+    my $error;
+    try {
+        $item->delete;
+        $invoice_gen->calculate_totals($invoice->id);
+    } catch {
+        $error = $_;
+        error("Failed to delete item: $error");
+    };
+
+    if ($error) {
+        status 500;
+        return { success => 0, error => 'Failed to delete item' };
+    }
+
+    $invoice->discard_changes;
+    return { success => 1, data => { invoice => { $invoice->get_columns } } };
 };
 
 del '/:id' => sub {

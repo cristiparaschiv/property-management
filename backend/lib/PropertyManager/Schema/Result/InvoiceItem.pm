@@ -56,6 +56,11 @@ __PACKAGE__->add_columns(
         is_nullable => 0,
         default_value => 0,
     },
+    is_manual => {
+        data_type => 'tinyint',
+        is_nullable => 0,
+        default_value => 0,
+    },
     created_at => {
         data_type => 'timestamp',
         is_nullable => 0,

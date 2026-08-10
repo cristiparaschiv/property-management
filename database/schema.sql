@@ -311,6 +311,7 @@ CREATE TABLE invoice_items (
     vat_rate DECIMAL(5,2) DEFAULT 0 COMMENT 'VAT percentage (e.g., 19.00)',
     total DECIMAL(10,2) NOT NULL COMMENT 'Line item total',
     sort_order INT DEFAULT 0 COMMENT 'Display order',
+    is_manual TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = manually added after generation (deletable); 0 = system base line',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,

@@ -18,6 +18,7 @@ import {
   Tooltip,
   Space,
   Dropdown,
+  Popconfirm,
 } from 'antd';
 import {
   PlusOutlined,
@@ -144,12 +145,35 @@ const Invoices = () => {
     onSuccess: () => {
       message.success('Linie adăugată. Totalul facturii a fost recalculat.');
       queryClient.invalidateQueries(['invoices']);
-      setAddLineModalOpen(false);
-      setAddLineInvoice(null);
+      queryClient.invalidateQueries(['invoice-items', addLineInvoice?.id]);
       addLineForm.resetFields();
+      addLineForm.setFieldsValue({ quantity: 1 });
     },
     onError: (error) => {
       message.error(error.response?.data?.error || 'Eroare la adăugarea liniei');
+    },
+  });
+
+  // The invoice's line items, loaded while the lines modal is open.
+  const { data: lineItemsData, isLoading: lineItemsLoading } = useQuery({
+    queryKey: ['invoice-items', addLineInvoice?.id],
+    queryFn: () => invoicesService.getById(addLineInvoice.id),
+    enabled: addLineModalOpen && !!addLineInvoice?.id,
+  });
+  const invoiceLineItems = useMemo(() => {
+    const items = lineItemsData?.data?.invoice?.items || [];
+    return [...items].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  }, [lineItemsData]);
+
+  const deleteLineItemMutation = useMutation({
+    mutationFn: ({ id, itemId }) => invoicesService.deleteItem(id, itemId),
+    onSuccess: () => {
+      message.success('Linie ștearsă. Totalul a fost recalculat.');
+      queryClient.invalidateQueries(['invoices']);
+      queryClient.invalidateQueries(['invoice-items', addLineInvoice?.id]);
+    },
+    onError: (error) => {
+      message.error(error.response?.data?.error || 'Eroare la ștergerea liniei');
     },
   });
 
@@ -594,7 +618,7 @@ const Invoices = () => {
                       icon={<PlusOutlined />}
                       onClick={() => handleShowAddLine(invoice)}
                       variant="edit"
-                      title="Adaugă linie (ex. corecție)"
+                      title="Linii / corecții"
                     />
                   )}
                   {!invoice.is_paid && (
@@ -1131,29 +1155,100 @@ const Invoices = () => {
       </Modal>
 
       <Modal
-        title="Adaugă linie pe factură"
+        title={`Linii factură — ${addLineInvoice?.invoice_number || ''}`}
         open={addLineModalOpen}
-        onOk={handleConfirmAddLine}
         onCancel={() => {
           setAddLineModalOpen(false);
           setAddLineInvoice(null);
           addLineForm.resetFields();
         }}
-        okText="Adaugă"
-        cancelText="Anulează"
-        confirmLoading={addLineItemMutation.isPending}
+        footer={[
+          <Button
+            key="close"
+            onClick={() => {
+              setAddLineModalOpen(false);
+              setAddLineInvoice(null);
+              addLineForm.resetFields();
+            }}
+          >
+            Închide
+          </Button>,
+        ]}
+        width={620}
       >
-        <div style={{ marginBottom: 16 }}>
-          <p>
-            Factura: <strong>{addLineInvoice?.invoice_number}</strong>
-            {' '}({formatCurrency(addLineInvoice?.total_ron)})
-          </p>
-          <p style={{ color: 'var(--pm-color-text-secondary)', fontSize: 13 }}>
-            Valoare negativă = corecție / stornare parțială. Totalul facturii se
-            recalculează automat.
-          </p>
-        </div>
-        <Form form={addLineForm} layout="vertical">
+        {lineItemsLoading ? (
+          <Spin />
+        ) : (
+          <div style={{ marginBottom: 16 }}>
+            {invoiceLineItems.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '8px 0',
+                  borderBottom: '1px solid var(--pm-color-border-default)',
+                }}
+              >
+                <span style={{ flex: 1 }}>{item.description}</span>
+                <span
+                  style={{
+                    fontWeight: 500,
+                    color: Number(item.total) < 0 ? 'var(--pm-color-error)' : 'inherit',
+                    minWidth: 110,
+                    textAlign: 'right',
+                  }}
+                >
+                  {formatCurrency(item.total)}
+                </span>
+                {item.is_manual ? (
+                  <Popconfirm
+                    title="Ștergeți această linie?"
+                    description="Totalul facturii va fi recalculat."
+                    okText="Șterge"
+                    cancelText="Anulează"
+                    onConfirm={() =>
+                      deleteLineItemMutation.mutate({ id: addLineInvoice.id, itemId: item.id })
+                    }
+                  >
+                    <Button
+                      danger
+                      size="small"
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      loading={deleteLineItemMutation.isPending}
+                      aria-label="Șterge linia"
+                    />
+                  </Popconfirm>
+                ) : (
+                  <Tag color="default" style={{ minWidth: 78, textAlign: 'center' }}>
+                    linie de bază
+                  </Tag>
+                )}
+              </div>
+            ))}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                paddingTop: 10,
+                fontWeight: 600,
+              }}
+            >
+              <span>Total factură</span>
+              <span>{formatCurrency(addLineInvoice?.total_ron)}</span>
+            </div>
+          </div>
+        )}
+
+        <Divider style={{ margin: '8px 0 16px' }}>Adaugă linie</Divider>
+        <p style={{ color: 'var(--pm-color-text-secondary)', fontSize: 13, marginTop: 0 }}>
+          Valoare negativă = corecție / stornare parțială. Doar liniile adăugate
+          aici pot fi șterse; liniile de bază nu.
+        </p>
+        <Form form={addLineForm} layout="vertical" onFinish={handleConfirmAddLine}>
           <Form.Item
             label="Descriere"
             name="description"
@@ -1161,27 +1256,41 @@ const Invoices = () => {
           >
             <Input placeholder="ex. Corecție calcul utilități Iunie 2026" />
           </Form.Item>
-          <Form.Item label="Cantitate" name="quantity" initialValue={1}>
-            <InputNumber min={1} decimalSeparator="," style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            label="Preț unitar (RON)"
-            name="unit_price"
-            rules={[
-              {
-                required: true,
-                message: 'Introduceți prețul (poate fi negativ pentru o corecție)',
-              },
-            ]}
+          <Row gutter={12}>
+            <Col span={8}>
+              <Form.Item label="Cantitate" name="quantity" initialValue={1}>
+                <InputNumber min={1} decimalSeparator="," style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={16}>
+              <Form.Item
+                label="Preț unitar (RON)"
+                name="unit_price"
+                rules={[
+                  {
+                    required: true,
+                    message: 'Introduceți prețul (poate fi negativ pentru o corecție)',
+                  },
+                ]}
+              >
+                <InputNumber
+                  decimalSeparator=","
+                  precision={2}
+                  step={0.01}
+                  style={{ width: '100%' }}
+                  placeholder="ex. -45,20"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Button
+            type="primary"
+            htmlType="submit"
+            icon={<PlusOutlined />}
+            loading={addLineItemMutation.isPending}
           >
-            <InputNumber
-              decimalSeparator=","
-              precision={2}
-              step={0.01}
-              style={{ width: '100%' }}
-              placeholder="ex. -45,20"
-            />
-          </Form.Item>
+            Adaugă linie
+          </Button>
         </Form>
       </Modal>
     </div>

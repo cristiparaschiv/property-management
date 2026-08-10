@@ -552,6 +552,7 @@ sub add_item {
         vat_rate => $vat_rate,
         total => $total,
         sort_order => $sort_order,
+        is_manual => $params{is_manual} ? 1 : 0,
     });
 
     return $item;

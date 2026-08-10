@@ -56,6 +56,11 @@ export const invoicesService = {
     return response.data;
   },
 
+  deleteItem: async (id, itemId) => {
+    const response = await api.delete(`/invoices/${id}/items/${itemId}`);
+    return response.data;
+  },
+
   addItem: async (id, data) => {
     const response = await api.post(`/invoices/${id}/items`, data);
     return response.data;
