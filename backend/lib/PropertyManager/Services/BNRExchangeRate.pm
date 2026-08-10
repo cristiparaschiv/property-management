@@ -128,7 +128,7 @@ Returns hashref with rate data or undef on failure.
 sub fetch_from_bnr {
     my ($self) = @_;
 
-    my $url = $self->{config}{app}{bnr_api_url} || 'https://www.bnr.ro/nbrfxrates.xml';
+    my $url = $self->{config}{app}{bnr_api_url} || 'https://curs.bnr.ro/nbrfxrates.xml';
 
     my $response;
     try {
@@ -332,7 +332,7 @@ are unavailable.
 =head1 BNR API
 
 The service uses the BNR daily exchange rates XML feed:
-https://www.bnr.ro/nbrfxrates.xml
+https://curs.bnr.ro/nbrfxrates.xml
 
 The XML structure is:
   <DataSet>
