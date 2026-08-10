@@ -47,13 +47,16 @@ $schema->resultset('UtilityCalculationDetail')->create({
     calculation_id => $calc->id, tenant_id => $tenant->id, utility_type => 'gas',
     percentage => 7.5, amount => 22.63 });
 
-# Gas readings: June present, May MISSING (must appear as null, not 0).
+# Gas readings: April and June present, May MISSING (must appear as null, not 0).
+$schema->resultset('GasReading')->create({ tenant_id => $tenant->id,
+    reading_date => '2026-04-30', reading_value => 100, previous_reading_value => 96,
+    consumption => 4, period_month => 4, period_year => 2026 });
 $schema->resultset('GasReading')->create({ tenant_id => $tenant->id,
     reading_date => '2026-06-30', reading_value => 104.3, previous_reading_value => 100,
     consumption => 4.3, period_month => 6, period_year => 2026 });
 
 subtest 'tenant overview aggregates KPIs, allocation, consumption, completeness' => sub {
-    plan tests => 10;
+    plan tests => 12;
 
     my $res = TestHelper::auth_get($test, '/api/tenants/' . $tenant->id . '/overview');
     is($res->code, 200, 'overview OK');
@@ -70,10 +73,15 @@ subtest 'tenant overview aggregates KPIs, allocation, consumption, completeness'
     my %alloc = map { $_->{utility_type} => $_->{total_ron} } @{ $d->{utility_allocation} };
     is(sprintf('%.2f', $alloc{electricity}), '150.00', 'electricity allocation summed');
 
-    # Gas series: June has a value; some earlier period is null (gap), never 0.
+    # Gas series: April and June have values; May (in range, no reading) is an
+    # explicit null gap, never 0 and never absent.
     my $gas = $d->{metered_consumption}{gas} || [];
     my ($june) = grep { $_->{period} eq '2026-06' } @$gas;
     is($june && $june->{value} + 0, 4.3, 'gas June consumption present');
+
+    my ($may) = grep { $_->{period} eq '2026-05' } @$gas;
+    ok($may, 'gas May entry present (not omitted)');
+    is($may->{value}, undef, 'gas May value is null, not 0');
 
     ok((grep { $_ eq 'phone' } @{ $d->{data_completeness}{empty_fields} }),
         'phone flagged as empty');

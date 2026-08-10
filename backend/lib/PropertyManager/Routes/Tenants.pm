@@ -426,6 +426,30 @@ get '/:id/overview' => sub {
         sort keys %alloc;
 
     # --- metered consumption per utility (gas/water direct; electricity via meters) ---
+    # Build a series over the FULL contiguous month range from the earliest to the
+    # latest reading for that utility, filling any month with no reading as an
+    # explicit { period, value => undef } gap (never a 0). This is required so the
+    # frontend's period-union merge can render a real gap even when a month is
+    # missing across every utility series.
+    my $fill_gaps = sub {
+        my (@rows_with_pm) = @_;   # list of [period_year, period_month, value_or_undef]
+        return [] unless @rows_with_pm;
+        my %by_period = map { sprintf('%04d-%02d', $_->[0], $_->[1]) => $_->[2] } @rows_with_pm;
+
+        my ($first_y, $first_m) = @{ $rows_with_pm[0] }[0,1];
+        my ($last_y, $last_m)   = @{ $rows_with_pm[-1] }[0,1];
+
+        my @series;
+        my ($y, $m) = ($first_y, $first_m);
+        while ($y < $last_y || ($y == $last_y && $m <= $last_m)) {
+            my $period = sprintf('%04d-%02d', $y, $m);
+            push @series, { period => $period, value => $by_period{$period} };
+            $m++;
+            if ($m > 12) { $m = 1; $y++; }
+        }
+        return \@series;
+    };
+
     my %metered;
     # gas + water
     for my $pair (['gas','GasReading'], ['water','WaterReading']) {
@@ -435,10 +459,10 @@ get '/:id/overview' => sub {
             { order_by => [{ -asc => 'period_year' }, { -asc => 'period_month' }] }
         )->all;
         next unless @rows;
-        $metered{$ut} = [ map {
-            { period => sprintf('%04d-%02d', $_->period_year, $_->period_month),
-              value => defined $_->consumption ? $_->consumption + 0 : undef }
-        } @rows ];
+        $metered{$ut} = $fill_gaps->(
+            map { [ $_->period_year, $_->period_month,
+                     defined $_->consumption ? $_->consumption + 0 : undef ] } @rows
+        );
     }
     # electricity via this tenant's meters
     my @meter_ids = map { $_->id }
@@ -448,10 +472,10 @@ get '/:id/overview' => sub {
             { meter_id => { -in => \@meter_ids } },
             { order_by => [{ -asc => 'period_year' }, { -asc => 'period_month' }] }
         )->all;
-        $metered{electricity} = [ map {
-            { period => sprintf('%04d-%02d', $_->period_year, $_->period_month),
-              value => defined $_->consumption ? $_->consumption + 0 : undef }
-        } @rows ] if @rows;
+        $metered{electricity} = $fill_gaps->(
+            map { [ $_->period_year, $_->period_month,
+                     defined $_->consumption ? $_->consumption + 0 : undef ] } @rows
+        ) if @rows;
     }
 
     # --- data completeness ---
