@@ -7,6 +7,7 @@ use Dancer2::Plugin::DBIC;
 use PropertyManager::Routes::Auth qw(require_auth require_csrf get_current_user);
 use PropertyManager::Services::ActivityLogger;
 use Try::Tiny;
+use DateTime;
 
 prefix '/api/tenants';
 
@@ -332,6 +333,145 @@ put '/:id/percentages' => sub {
     return { success => 1, data => {
         percentages => \%result_percentages,
         utility_percentages => \@utility_percentages,
+    } };
+};
+
+# GET /api/tenants/:id/overview - read-only analytical read-model for tenant 360
+get '/:id/overview' => sub {
+    my $auth_error = require_auth();
+    return $auth_error if $auth_error;
+
+    my $tenant = schema->resultset('Tenant')->find(route_parameters->get('id'), {
+        prefetch => 'utility_percentages',
+    });
+    unless ($tenant) {
+        status 404;
+        return { success => 0, error => 'Tenant not found' };
+    }
+
+    # --- tenant block ---
+    my %tenant_data = $tenant->get_columns;
+    $tenant_data{utility_percentages} = [
+        map { { utility_type => $_->utility_type, percentage => $_->percentage + 0,
+                uses_meter => $_->uses_meter ? 1 : 0 } }
+        $tenant->utility_percentages->all
+    ];
+
+    # --- invoices -> KPIs + payment behaviour ---
+    my @invoices = schema->resultset('Invoice')->search(
+        { tenant_id => $tenant->id }, { order_by => 'invoice_date' }
+    )->all;
+
+    my $days_between = sub {
+        my ($from, $to) = @_;                       # 'YYYY-MM-DD' strings
+        return undef unless $from && $to;
+        my @a = $from =~ /^(\d{4})-(\d{2})-(\d{2})/ or return undef;
+        my @b = $to   =~ /^(\d{4})-(\d{2})-(\d{2})/ or return undef;
+        my $d1 = DateTime->new(year=>$a[0], month=>$a[1], day=>$a[2]);
+        my $d2 = DateTime->new(year=>$b[0], month=>$b[1], day=>$b[2]);
+        return $d2->delta_days($d1)->in_units('days') * ($d2 >= $d1 ? 1 : -1);
+    };
+
+    my ($billed, $paid, $open_count) = (0, 0, 0);
+    my (@pay_points, @pay_lags, @overdue_days);
+    my $today = DateTime->now->ymd;
+    for my $inv (@invoices) {
+        my $amt = $inv->total_ron + 0;
+        $billed += $amt;
+        if ($inv->is_paid) {
+            $paid += $amt;
+            if ($inv->paid_date) {
+                my $lag = $days_between->($inv->invoice_date . '', $inv->paid_date . '');
+                if (defined $lag) {
+                    push @pay_points, { invoice_date => $inv->invoice_date . '', days_to_pay => $lag };
+                    push @pay_lags, $lag;
+                }
+            }
+        } else {
+            $open_count++;
+            my $ref = ($inv->due_date // $inv->invoice_date) . '';
+            my $od = $days_between->($ref, $today);
+            push @overdue_days, $od if defined $od && $od > 0;
+        }
+    }
+    my $avg_days = @pay_lags ? int(0.5 + (eval { my $s=0; $s+=$_ for @pay_lags; $s } / @pay_lags)) : undef;
+    my $oldest   = @overdue_days ? (sort { $b <=> $a } @overdue_days)[0] : undef;
+
+    my %kpis = (
+        billed_ron        => sprintf('%.2f', $billed) + 0,
+        paid_ron          => sprintf('%.2f', $paid) + 0,
+        outstanding_ron   => sprintf('%.2f', $billed - $paid) + 0,
+        open_count        => $open_count,
+        oldest_unpaid_days => $oldest,
+        avg_days_to_pay   => $avg_days,
+    );
+
+    # --- utility allocation (finalized calcs only), grouped by utility ---
+    my $alloc_rs = schema->resultset('UtilityCalculationDetail')->search(
+        { 'me.tenant_id' => $tenant->id, 'calculation.is_finalized' => 1 },
+        { join => 'calculation',
+          select => ['me.utility_type', { sum => 'me.amount' }],
+          as     => ['utility_type', 'total'],
+          group_by => ['me.utility_type'] }
+    );
+    my %alloc;
+    while (my $row = $alloc_rs->next) {
+        $alloc{ $row->get_column('utility_type') } = sprintf('%.2f', $row->get_column('total') || 0) + 0;
+    }
+    # keep a 0 bar for utilities the tenant carries a standing rate for
+    for my $up ($tenant->utility_percentages->all) {
+        $alloc{ $up->utility_type } //= 0 if $up->percentage > 0 || $up->uses_meter;
+    }
+    my @utility_allocation = map { { utility_type => $_, total_ron => $alloc{$_} } }
+        sort keys %alloc;
+
+    # --- metered consumption per utility (gas/water direct; electricity via meters) ---
+    my %metered;
+    # gas + water
+    for my $pair (['gas','GasReading'], ['water','WaterReading']) {
+        my ($ut, $rs) = @$pair;
+        my @rows = schema->resultset($rs)->search(
+            { tenant_id => $tenant->id },
+            { order_by => [{ -asc => 'period_year' }, { -asc => 'period_month' }] }
+        )->all;
+        next unless @rows;
+        $metered{$ut} = [ map {
+            { period => sprintf('%04d-%02d', $_->period_year, $_->period_month),
+              value => defined $_->consumption ? $_->consumption + 0 : undef }
+        } @rows ];
+    }
+    # electricity via this tenant's meters
+    my @meter_ids = map { $_->id }
+        schema->resultset('ElectricityMeter')->search({ tenant_id => $tenant->id })->all;
+    if (@meter_ids) {
+        my @rows = schema->resultset('MeterReading')->search(
+            { meter_id => { -in => \@meter_ids } },
+            { order_by => [{ -asc => 'period_year' }, { -asc => 'period_month' }] }
+        )->all;
+        $metered{electricity} = [ map {
+            { period => sprintf('%04d-%02d', $_->period_year, $_->period_month),
+              value => defined $_->consumption ? $_->consumption + 0 : undef }
+        } @rows ] if @rows;
+    }
+
+    # --- data completeness ---
+    my @empty;
+    for my $f (qw(cui_cnp j_number postal_code phone email contract_start contract_end notes)) {
+        my $v = $tenant->get_column($f);
+        push @empty, $f unless defined $v && $v ne '';
+    }
+    my %data_completeness = (
+        empty_fields => \@empty,
+        not_modelled => [qw(deposit area_sqm lease_term signed_contract contact_person iban)],
+    );
+
+    return { success => 1, data => {
+        tenant             => \%tenant_data,
+        kpis               => \%kpis,
+        payment_behaviour  => \@pay_points,
+        utility_allocation => \@utility_allocation,
+        metered_consumption => \%metered,
+        data_completeness  => \%data_completeness,
     } };
 };
 

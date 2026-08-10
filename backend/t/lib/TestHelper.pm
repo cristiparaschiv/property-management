@@ -321,7 +321,7 @@ sub create_test_tenant {
         city => $params{city} || 'Bucharest',
         county => $params{county} || 'Bucharest',
         email => $params{email} || 'test@example.com',
-        phone => $params{phone} || '0212345678',
+        phone => exists $params{phone} ? $params{phone} : '0212345678',
         rent_amount_eur => $params{rent_amount_eur} || 500.00,
         is_active => defined $params{is_active} ? $params{is_active} : 1,
         contract_start => $params{contract_start} || '2025-01-01',
