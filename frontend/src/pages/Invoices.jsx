@@ -76,6 +76,9 @@ const Invoices = () => {
   const [paidDateModalOpen, setPaidDateModalOpen] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
   const [selectedPaidDate, setSelectedPaidDate] = useState(null);
+  const [addLineModalOpen, setAddLineModalOpen] = useState(false);
+  const [addLineInvoice, setAddLineInvoice] = useState(null);
+  const [addLineForm] = Form.useForm();
 
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -135,6 +138,41 @@ const Invoices = () => {
       message.error(error.response?.data?.error || 'Eroare la ștergere');
     },
   });
+
+  const addLineItemMutation = useMutation({
+    mutationFn: ({ id, data }) => invoicesService.addItem(id, data),
+    onSuccess: () => {
+      message.success('Linie adăugată. Totalul facturii a fost recalculat.');
+      queryClient.invalidateQueries(['invoices']);
+      setAddLineModalOpen(false);
+      setAddLineInvoice(null);
+      addLineForm.resetFields();
+    },
+    onError: (error) => {
+      message.error(error.response?.data?.error || 'Eroare la adăugarea liniei');
+    },
+  });
+
+  const handleShowAddLine = (invoice) => {
+    setAddLineInvoice(invoice);
+    addLineForm.resetFields();
+    addLineForm.setFieldsValue({ quantity: 1 });
+    setAddLineModalOpen(true);
+  };
+
+  const handleConfirmAddLine = () => {
+    addLineForm.validateFields().then((values) => {
+      addLineItemMutation.mutate({
+        id: addLineInvoice.id,
+        data: {
+          description: values.description,
+          quantity: values.quantity || 1,
+          unit_price: values.unit_price,
+          vat_rate: 0,
+        },
+      });
+    });
+  };
 
   const handleDownloadPDF = async (id, invoiceNumber) => {
     try {
@@ -550,6 +588,14 @@ const Invoices = () => {
                         </button>
                       </Dropdown>
                     </Tooltip>
+                  )}
+                  {!invoice.is_paid && (
+                    <ActionButton
+                      icon={<PlusOutlined />}
+                      onClick={() => handleShowAddLine(invoice)}
+                      variant="edit"
+                      title="Adaugă linie (ex. corecție)"
+                    />
                   )}
                   {!invoice.is_paid && (
                     <ActionButton
@@ -1082,6 +1128,61 @@ const Invoices = () => {
             allowClear={false}
           />
         </Form.Item>
+      </Modal>
+
+      <Modal
+        title="Adaugă linie pe factură"
+        open={addLineModalOpen}
+        onOk={handleConfirmAddLine}
+        onCancel={() => {
+          setAddLineModalOpen(false);
+          setAddLineInvoice(null);
+          addLineForm.resetFields();
+        }}
+        okText="Adaugă"
+        cancelText="Anulează"
+        confirmLoading={addLineItemMutation.isPending}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>
+            Factura: <strong>{addLineInvoice?.invoice_number}</strong>
+            {' '}({formatCurrency(addLineInvoice?.total_ron)})
+          </p>
+          <p style={{ color: 'var(--pm-color-text-secondary)', fontSize: 13 }}>
+            Valoare negativă = corecție / stornare parțială. Totalul facturii se
+            recalculează automat.
+          </p>
+        </div>
+        <Form form={addLineForm} layout="vertical">
+          <Form.Item
+            label="Descriere"
+            name="description"
+            rules={[{ required: true, message: 'Introduceți o descriere' }]}
+          >
+            <Input placeholder="ex. Corecție calcul utilități Iunie 2026" />
+          </Form.Item>
+          <Form.Item label="Cantitate" name="quantity" initialValue={1}>
+            <InputNumber min={1} decimalSeparator="," style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            label="Preț unitar (RON)"
+            name="unit_price"
+            rules={[
+              {
+                required: true,
+                message: 'Introduceți prețul (poate fi negativ pentru o corecție)',
+              },
+            ]}
+          >
+            <InputNumber
+              decimalSeparator=","
+              precision={2}
+              step={0.01}
+              style={{ width: '100%' }}
+              placeholder="ex. -45,20"
+            />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
