@@ -5,7 +5,7 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { tenantsService } from '../../services/tenantsService';
 import { invoicesService } from '../../services/invoicesService';
 import { dashboardService } from '../../services/dashboardService';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatNumber } from '../../utils/formatters';
 import TenantCharts from './TenantCharts';
 
 const TenantDetail = () => {
@@ -129,9 +129,9 @@ const TenantDetail = () => {
                 columns={[
                   { title: 'Data', dataIndex: 'date', render: (d) => formatDate(d) },
                   { title: 'Descriere', dataIndex: 'description' },
-                  { title: 'Debit', dataIndex: 'debit', align: 'right' },
-                  { title: 'Credit', dataIndex: 'credit', align: 'right' },
-                  { title: 'Sold', dataIndex: 'balance', align: 'right' },
+                  { title: 'Debit', dataIndex: 'debit', align: 'right', render: (v) => (v === '' || v == null ? '' : formatNumber(Number(v))) },
+                  { title: 'Credit', dataIndex: 'credit', align: 'right', render: (v) => (v === '' || v == null ? '' : formatNumber(Number(v))) },
+                  { title: 'Sold', dataIndex: 'balance', align: 'right', render: (v) => (v === '' || v == null ? '' : formatNumber(Number(v))) },
                 ]}
               />
             ),
