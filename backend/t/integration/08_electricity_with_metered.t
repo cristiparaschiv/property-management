@@ -92,16 +92,18 @@ subtest 'finalize recovers a non-metered detail dropped by a stale draft overrid
     is(sprintf('%.2f', $ed ? $ed->amount : 0), '150.00', 'electricity = 30% of 500 (from DB percentage)') if $ed;
 };
 
-# An ad-hoc per-calc percentage that WAS persisted at create time must survive
-# finalize (not be reverted to the DB percentage).
-subtest 'finalize preserves a persisted ad-hoc non-metered override' => sub {
+# Finalize is authoritative on the CURRENT DB standing percentage: a draft that
+# froze a different electricity % (e.g. 50 at create time) must be re-billed at
+# the DB 30% once finalized. This is what lets a later "Salvează %" reach the
+# invoices — the draft detail is a preview only, never the source of truth.
+subtest 'finalize re-bills a non-metered utility at the current DB percentage' => sub {
     plan tests => 3;
 
     my ($tenant, $gas_inv, $water_inv) = build();
 
     my $c = TestHelper::auth_post($test, '/api/utility-calculations', {
         period_year => 2026, period_month => 6,
-        overrides => { $tenant->id => { electricity => 50 } },  # ad-hoc, differs from DB 30
+        overrides => { $tenant->id => { electricity => 50 } },  # frozen draft %, differs from DB 30
     });
     my $cid = decode_json($c->content)->{data}{calculation}{id};
     save_meters($cid, $gas_inv, $water_inv);
@@ -111,7 +113,7 @@ subtest 'finalize preserves a persisted ad-hoc non-metered override' => sub {
 
     my $ed = elec_detail($cid, $tenant->id);
     ok($ed, 'electricity detail present');
-    is(sprintf('%.2f', $ed ? $ed->amount : 0), '250.00', 'ad-hoc 50% preserved (250 = 50% of 500)') if $ed;
+    is(sprintf('%.2f', $ed ? $ed->amount : 0), '150.00', 'finalized at DB 30% (150 = 30% of 500), not frozen 50%') if $ed;
 };
 
 # Metered amounts remain correct through the full recompute.

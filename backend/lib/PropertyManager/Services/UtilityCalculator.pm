@@ -378,29 +378,17 @@ sub recompute_all_details {
     my $calc = $schema->resultset('UtilityCalculation')->find($calculation_id)
         or die "Calculation $calculation_id not found\n";
 
-    # Rebuild overrides from the currently-persisted NON-metered details so
-    # ad-hoc percentages survive. Metered (gas/water uses_meter) pairs are left
-    # out so they recompute from meter readings; non-metered pairs with no
-    # persisted detail are left out too, so they fall back to the stored
-    # tenant percentage (recovering an electricity/etc. detail a stale draft
-    # dropped).
-    my %overrides;
-    my @details = $schema->resultset('UtilityCalculationDetail')
-        ->search({ calculation_id => $calculation_id })->all;
-    for my $d (@details) {
-        my $up = $schema->resultset('TenantUtilityPercentage')->search({
-            tenant_id => $d->tenant_id, utility_type => $d->utility_type,
-        })->first;
-        next if $up && $up->uses_meter
-            && ($d->utility_type eq 'gas' || $d->utility_type eq 'water');
-        $overrides{ $d->tenant_id }{ $d->utility_type } = $d->percentage + 0;
-    }
-
+    # Recompute purely from the authoritative sources: non-metered utilities
+    # use the tenant's CURRENT standing percentage (tenant_utility_percentages,
+    # updated via "Salvează %"), metered gas/water use meter readings. We
+    # deliberately do NOT rebuild overrides from the persisted draft details:
+    # those freeze whatever percentage existed when the draft was created, and
+    # since the "Salvează Calcul" button is disabled once a calc exists, a later
+    # "Salvează %" would otherwise never reach the finalized invoices.
     my $result = $self->calculate_shares(
         year           => $calc->period_year,
         month          => $calc->period_month,
         calculation_id => $calculation_id,
-        overrides      => \%overrides,
         strict         => 1,
     );
 
