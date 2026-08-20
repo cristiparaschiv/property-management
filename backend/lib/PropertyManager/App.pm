@@ -105,6 +105,7 @@ use PropertyManager::Routes::Docs;
 use PropertyManager::Routes::ActivityLogs;
 use PropertyManager::Routes::Notifications;
 use PropertyManager::Routes::GoogleDrive;
+use PropertyManager::Routes::Loans;
 
 our $VERSION = '1.0.0';
 

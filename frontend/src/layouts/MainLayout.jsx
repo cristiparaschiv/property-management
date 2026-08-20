@@ -20,6 +20,7 @@ import {
   BulbOutlined,
   BulbFilled,
   KeyOutlined,
+  WalletOutlined,
   CloudOutlined,
   PieChartOutlined,
   FireOutlined,
@@ -201,6 +202,8 @@ const MainLayout = () => {
   const handleMenuClick = ({ key }) => {
     if (key === 'profile') {
       navigate('/profile');
+    } else if (key === 'loans') {
+      navigate('/loans');
     } else if (key === 'change-password') {
       setChangePasswordVisible(true);
     } else if (key === 'logout') {
@@ -218,6 +221,14 @@ const MainLayout = () => {
       key: 'change-password',
       icon: <KeyOutlined />,
       label: 'Schimbă parola',
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'loans',
+      icon: <WalletOutlined />,
+      label: 'Împrumuturi',
     },
     {
       type: 'divider',

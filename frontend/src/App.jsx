@@ -27,6 +27,7 @@ import UtilityCalculations from './pages/UtilityCalculations';
 import Invoices from './pages/Invoices';
 import Reports from './pages/Reports';
 import Backups from './pages/Backups';
+import Loans from './pages/Loans';
 
 // Import global styles
 import './styles/global.css';
@@ -77,6 +78,7 @@ function AppContent() {
             <Route path="invoices" element={<Invoices />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Backups />} />
+            <Route path="loans" element={<Loans />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
