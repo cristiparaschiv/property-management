@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Card, Row, Col, Table, Button, Form, DatePicker, InputNumber, Input, Select,
-  Space, Statistic, Progress, Popconfirm, message, Empty, Spin, Tag, Alert,
+  Space, Statistic, Progress, Popconfirm, message, Empty, Spin, Alert, Modal,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
 import {
@@ -12,8 +12,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { loansService } from '../services/loansService';
 import { formatCurrency, formatDate } from '../utils/formatters';
-
-const { TextArea } = Input;
 
 // Validated for contrast and colour-blind separation in both themes.
 const DEBT = '#8e3b7a';
@@ -304,31 +302,35 @@ const Loans = () => {
         </Card>
       </Spin>
 
-      {showSettings && (
-        <Card size="small" title="Setări — compensare lunară" style={{ marginTop: 12 }}
-              extra={<Button type="text" onClick={() => setShowSettings(false)}>Închide</Button>}>
-          <Alert
-            type="info" showIcon style={{ marginBottom: 12 }}
-            message="Se acumulează automat până în luna curentă. Pune 0 ca să dezactivezi."
-          />
-          <Form form={settingsForm} layout="inline" onFinish={handleSettings}>
-            <Form.Item name="offset_label" label="Denumire">
-              <Input style={{ width: 200 }} placeholder="Servicii contabile" />
-            </Form.Item>
-            <Form.Item name="offset_rate" label="RON / lună">
-              <InputNumber min={0} step={50} style={{ width: 130 }} />
-            </Form.Item>
-            <Form.Item name="offset_start" label="Începând cu">
-              <DatePicker format="DD.MM.YYYY" />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" htmlType="submit" loading={settingsMutation.isPending}>
-                Salvează
-              </Button>
-            </Form.Item>
-          </Form>
-        </Card>
-      )}
+      {/* A modal, not an inline panel: the button sits above the fold and the
+          entries table below it is long, so a panel appended at the end of the
+          page opened out of sight and read as a dead button. */}
+      <Modal
+        title="Setări — compensare lunară"
+        open={showSettings}
+        onCancel={() => setShowSettings(false)}
+        onOk={() => settingsForm.submit()}
+        okText="Salvează"
+        cancelText="Anulează"
+        confirmLoading={settingsMutation.isPending}
+        destroyOnClose
+      >
+        <Alert
+          type="info" showIcon style={{ marginBottom: 16 }}
+          message="Se acumulează automat până în luna curentă. Pune 0 ca să dezactivezi."
+        />
+        <Form form={settingsForm} layout="vertical" onFinish={handleSettings}>
+          <Form.Item name="offset_label" label="Denumire">
+            <Input placeholder="Servicii contabile" />
+          </Form.Item>
+          <Form.Item name="offset_rate" label="RON / lună">
+            <InputNumber min={0} step={50} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="offset_start" label="Începând cu">
+            <DatePicker format="DD.MM.YYYY" style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Space>
   );
 };
