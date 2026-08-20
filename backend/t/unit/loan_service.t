@@ -136,4 +136,17 @@ subtest 'no repayments means no projection' => sub {
     is($s->{projected_payoff}, undef, 'cannot extrapolate from nothing');
 };
 
+subtest 'describe returns one hashref per loan, not a flattened list' => sub {
+    # A bare `{ %hash, key => $v }` at the start of a map block parses as a
+    # BLOCK, and the map then yields the flattened pairs instead of a hashref.
+    # The API returned ["id", 1, "person", "Sile", ...] because of it.
+    my $row = { id => 1, person => 'Sile', %LOAN };
+    my @out = map { $svc->describe($_, \@ENTRIES, '2026-08-20') } ($row);
+
+    is(scalar @out, 1, 'one element per loan');
+    is(ref $out[0], 'HASH', 'and it is a hashref');
+    is($out[0]{person}, 'Sile', 'loan columns survive');
+    is($out[0]{summary}{net_owed}, '102918.00', 'summary is nested under it');
+};
+
 done_testing();

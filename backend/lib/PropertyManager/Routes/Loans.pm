@@ -17,7 +17,9 @@ sub _today { strftime('%Y-%m-%d', localtime) }
 
 sub _entries_of {
     my ($loan) = @_;
-    return [ map { { $_->get_columns } }
+    # The leading + is load-bearing: a bare { ... } at the start of a map block
+    # parses as a BLOCK, and the map then yields flattened pairs, not hashrefs.
+    return [ map { +{ $_->get_columns } }
              $loan->entries->search({}, { order_by => ['entry_date', 'id'] })->all ];
 }
 
@@ -28,11 +30,7 @@ get '' => sub {
         {}, { order_by => [{ -desc => 'is_active' }, 'person'] })->all;
 
     my $today = _today();
-    my @data = map {
-        my %l = $_->get_columns;
-        my $summary = $SVC->summarise(\%l, _entries_of($_), $today);
-        { %l, summary => $summary };
-    } @loans;
+    my @data = map { $SVC->describe({ $_->get_columns }, _entries_of($_), $today) } @loans;
 
     return { success => 1, data => { loans => \@data } };
 };

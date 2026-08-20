@@ -110,6 +110,21 @@ sub balance_series {
     return \@points;
 }
 
+=head2 describe($loan, $entries, $as_of)
+
+A loan's columns with its summary nested under C<summary>.
+
+Note the leading C<+>. Without it Perl reads C<{ %$loan, ... }> at the start of
+a map block as a BLOCK rather than an anonymous hash, and the map yields the
+flattened key/value pairs instead of one hashref per loan.
+
+=cut
+
+sub describe {
+    my ($class, $loan, $entries, $as_of) = @_;
+    return +{ %$loan, summary => $class->summarise($loan, $entries, $as_of) };
+}
+
 =head2 summarise($loan, $entries, $as_of)
 
 Totals, the monthly offset, repayment pace and a payoff projection.
