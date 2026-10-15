@@ -807,6 +807,20 @@
                 Apă pluvială: [% item.rain_percentage %]% × [% item.rain_cost %] RON = [% item.rain_share %] RON<br>
                 Total: <b>[% item.tenant_amount %] RON</b> (cotă efectivă pe factura furnizor: [% item.effective_pct %]%)
             </p>
+            [% ELSIF item.utility_type == 'electricity' %]
+            <h4 style="margin: 0 0 8px 0;">Electricitate</h4>
+            <p style="margin: 0;">
+                Index anterior: [% item.previous_index %] kWh<br>
+                Index curent: [% item.current_index %] kWh<br>
+                Consum: [% item.tenant_units %] kWh<br>
+                Consum general clădire: [% item.general_units %] kWh ([% item.general_meter_name %])<br>
+                [% IF item.derivation_ok %]
+                Cotă: [% item.tenant_units %] / [% item.general_units %] = [% item.effective_pct %]%<br>
+                [% ELSE %]
+                Cotă facturată: [% item.effective_pct %]%<br>
+                [% END %]
+                Sumă: [% item.effective_pct %]% × [% item.invoice_amount %] RON = <b>[% item.tenant_amount %] RON</b>
+            </p>
             [% END %]
         </div>
         [% END %]

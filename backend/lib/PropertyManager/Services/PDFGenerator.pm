@@ -795,11 +795,15 @@ sub build_invoice_template_vars {
 
 =head2 _build_metered_breakdown
 
-Build per-utility breakdown items for gas/water lines where the tenant
-has uses_meter=1. Returns a list of hashrefs consumed by the invoice
-template's "Detalii calcul contori" section.
+Build per-utility breakdown items consumed by the invoice template's
+"Detalii calcul contori" section: gas/water lines where the tenant has
+uses_meter=1, plus electricity lines where an electricity meter is assigned
+to the tenant. Entries are ordered electricity, gas, water so page order
+does not depend on the order the details come back from the database.
 
 =cut
+
+my %BREAKDOWN_ORDER = (electricity => 0, gas => 1, water => 2);
 
 sub _build_metered_breakdown {
     my ($self, $invoice, $calculation, $details, $tenant) = @_;
@@ -807,8 +811,18 @@ sub _build_metered_breakdown {
     my $schema = $self->{schema};
     my @breakdown;
 
-    foreach my $detail (@$details) {
+    foreach my $detail (sort { ($BREAKDOWN_ORDER{$a->utility_type} // 9)
+                           <=> ($BREAKDOWN_ORDER{$b->utility_type} // 9) } @$details) {
         my $utype = $detail->utility_type;
+
+        if ($utype eq 'electricity') {
+            my $item = $self->_build_electricity_breakdown_item(
+                $calculation, $detail, $tenant
+            );
+            push @breakdown, $item if $item;
+            next;
+        }
+
         next unless $utype eq 'gas' || $utype eq 'water';
 
         my $tup = $schema->resultset('TenantUtilityPercentage')->search({
@@ -882,6 +896,121 @@ sub _build_metered_breakdown {
     }
 
     return @breakdown;
+}
+
+=head2 _build_electricity_breakdown_item
+
+Build the breakdown entry for an electricity detail. Electricity is invoiced
+on the tenant's standing percentage, but where a meter is assigned to the
+tenant that percentage is the tenant meter's share of the GM-001 general
+building meter, so the sheet shows that derivation.
+
+The money lines always come from the invoiced detail, so they reconcile with
+the invoice total by construction. C<derivation_ok> reports whether the meter
+figures actually reproduce the percentage we billed; when they do not (a
+newly installed meter, a missing reading) the template drops the equation
+rather than print arithmetic that contradicts itself.
+
+Returns undef when there is nothing to show: no meter assigned to the tenant,
+or no reading for either meter in the invoiced period.
+
+=cut
+
+sub _build_electricity_breakdown_item {
+    my ($self, $calculation, $detail, $tenant) = @_;
+
+    my $schema = $self->{schema};
+
+    my $meter = $schema->resultset('ElectricityMeter')->search({
+        tenant_id  => $tenant->id,
+        is_general => 0,
+        is_active  => 1,
+    })->first;
+    return undef unless $meter;
+
+    my $general = $self->_general_building_meter;
+    return undef unless $general;
+
+    my $reading         = $self->_meter_reading($meter->id, $calculation);
+    my $general_reading = $self->_meter_reading($general->id, $calculation);
+    return undef unless $reading && $general_reading;
+
+    my $tenant_units = $reading->consumption;
+    unless (defined $tenant_units) {
+        $tenant_units = ($reading->reading_value || 0)
+                      - ($reading->previous_reading_value || 0);
+    }
+
+    my $general_units = $general_reading->consumption // 0;
+    my $ratio_pct = $general_units > 0 ? ($tenant_units / $general_units) * 100 : 0;
+
+    my $invoice_amount;
+    if ($detail->received_invoice_id) {
+        my $ri = $schema->resultset('ReceivedInvoice')->find($detail->received_invoice_id);
+        $invoice_amount = $ri ? $ri->amount : undef;
+    }
+
+    my $ratio     = sprintf('%.2f', $ratio_pct);
+    my $effective = sprintf('%.2f', $detail->percentage);
+
+    return {
+        utility_type       => 'electricity',
+        previous_index     => sprintf('%.2f', $reading->previous_reading_value // 0),
+        current_index      => sprintf('%.2f', $reading->reading_value // 0),
+        tenant_units       => sprintf('%.2f', $tenant_units // 0),
+        general_units      => sprintf('%.2f', $general_units),
+        general_meter_name => $general->name,
+        ratio_pct          => $ratio,
+        effective_pct      => $effective,
+        invoice_amount     => defined $invoice_amount ? sprintf('%.2f', $invoice_amount) : '',
+        tenant_amount      => sprintf('%.2f', $detail->amount),
+        derivation_ok      => ($ratio eq $effective) ? 1 : 0,
+    };
+}
+
+=head2 _general_building_meter
+
+The general meter whose consumption is the denominator for a tenant's
+electricity share. Both the building meter (GM-001) and the start-of-month
+statistics meter (GM-002) carry is_general=1 and report different
+consumption, so the building meter is selected explicitly rather than by
+taking whichever row comes back first.
+
+=cut
+
+sub _general_building_meter {
+    my ($self) = @_;
+
+    my $rs = $self->{schema}->resultset('ElectricityMeter');
+
+    my $meter = $rs->search({
+        is_general   => 1,
+        is_active    => 1,
+        meter_number => 'GM-001',
+    })->first;
+
+    return $meter if $meter;
+
+    return $rs->search(
+        { is_general => 1, is_active => 1 },
+        { order_by => { -asc => 'id' } },
+    )->first;
+}
+
+=head2 _meter_reading
+
+The electricity meter reading for a meter in a calculation's period.
+
+=cut
+
+sub _meter_reading {
+    my ($self, $meter_id, $calculation) = @_;
+
+    return $self->{schema}->resultset('MeterReading')->search({
+        meter_id     => $meter_id,
+        period_year  => $calculation->period_year,
+        period_month => $calculation->period_month,
+    })->first;
 }
 
 =head2 _html_to_pdf
