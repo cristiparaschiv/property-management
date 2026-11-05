@@ -11,8 +11,19 @@ test('tipurile facturate chiriasilor nu coboara sub zero', () => {
   }
 });
 
-test('tipul "other" nu are limita inferioara', () => {
-  assert.equal(minAmountFor('other'), undefined);
+// Must be a real negative number, never undefined: MoneyInput declares
+// `min = 0` as a destructuring default, and a default fires on undefined, so
+// an undefined lower bound silently becomes 0 and keeps blocking the minus.
+test('tipul "other" primeste o limita inferioara negativa, nu undefined', () => {
+  const min = minAmountFor('other');
+  assert.notEqual(min, undefined, 'undefined ar fi inlocuit de valoarea implicita 0');
+  assert.ok(min < 0, `limita trebuie sa fie negativa, este ${min}`);
+});
+
+// The composition that actually failed in production.
+test('limita pentru "other" supravietuieste valorii implicite din MoneyInput', () => {
+  const asMoneyInputSeesIt = ({ min = 0 }) => min;
+  assert.ok(asMoneyInputSeesIt({ min: minAmountFor('other') }) < 0);
 });
 
 test('fara tip selectat ramane limita prudenta', () => {

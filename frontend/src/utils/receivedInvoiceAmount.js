@@ -9,10 +9,13 @@
 
 const NEGATIVE_ALLOWED_FOR = 'other';
 
-// Lower bound for the amount input. undefined means "no lower bound";
-// anything but "other" - including nothing selected yet - stays at zero.
+// Lower bound for the amount input. Must be an actual number, never
+// undefined: MoneyInput declares `min = 0` as a destructuring default, and a
+// default fires on undefined, so an undefined bound silently becomes 0 and
+// goes on blocking the minus. Anything but "other" - including nothing
+// selected yet - stays at zero.
 export const minAmountFor = (utilityType) =>
-  utilityType === NEGATIVE_ALLOWED_FOR ? undefined : 0;
+  utilityType === NEGATIVE_ALLOWED_FOR ? Number.NEGATIVE_INFINITY : 0;
 
 // Validation message for an entered amount, or null when it is acceptable.
 // An empty amount is the "required" rule's business, not ours.
