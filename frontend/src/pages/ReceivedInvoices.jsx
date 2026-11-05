@@ -32,6 +32,7 @@ import { receivedInvoicesService } from '../services/receivedInvoicesService';
 import { utilityProvidersService } from '../services/utilityProvidersService';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { UTILITY_TYPE_OPTIONS, getUtilityTypeLabel } from '../constants/utilityTypes';
+import { minAmountFor, amountError } from '../utils/receivedInvoiceAmount';
 import EmptyState from '../components/EmptyState';
 import CardRow, {
   CardRowPrimary,
@@ -478,12 +479,31 @@ const ReceivedInvoices = () => {
             <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
           </Form.Item>
 
+          {/* Storno invoices are negative, and only "other" may go negative. */}
           <Form.Item
-            label="Sumă"
-            name="amount"
-            rules={[{ required: true, message: 'Suma este obligatorie' }]}
+            noStyle
+            shouldUpdate={(prev, curr) => prev?.utility_type !== curr?.utility_type}
           >
-            <MoneyInput />
+            {({ getFieldValue }) => {
+              const utilityType = getFieldValue('utility_type');
+              return (
+                <Form.Item
+                  label="Sumă"
+                  name="amount"
+                  rules={[
+                    { required: true, message: 'Suma este obligatorie' },
+                    {
+                      validator: (_, value) => {
+                        const error = amountError(value, utilityType);
+                        return error ? Promise.reject(new Error(error)) : Promise.resolve();
+                      },
+                    },
+                  ]}
+                >
+                  <MoneyInput min={minAmountFor(utilityType)} />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
 
           <Form.Item

@@ -105,10 +105,14 @@ post '' => sub {
         return { success => 0, error => 'Missing required fields' };
     }
 
-    # Validate amount is positive
-    if ($data->{amount} < 0) {
+    # A negative amount is a storno / credit note: the supplier is giving money
+    # back. Only "other" invoices may go negative, because the tenant-billed
+    # types feed the percentage splits that reach tenant invoices, where a
+    # negative has no defined meaning yet.
+    if ($data->{amount} < 0 && $data->{utility_type} ne 'other') {
         status 400;
-        return { success => 0, error => 'Amount must be positive' };
+        return { success => 0,
+                 error => 'Negative amounts are only allowed for "other" invoices' };
     }
 
     # Validate provider exists
@@ -165,10 +169,18 @@ put '/:id' => sub {
 
     my $data = request->data;
 
-    # Validate amount is positive if provided
-    if (exists $data->{amount} && $data->{amount} < 0) {
+    # Check the row this update would produce, not just what it carries: moving
+    # an existing negative invoice onto a tenant-billed type has to be caught
+    # even though the amount is not in the payload.
+    my $new_amount = exists $data->{amount}       ? $data->{amount}
+                                                  : $invoice->amount;
+    my $new_type   = exists $data->{utility_type} ? $data->{utility_type}
+                                                  : $invoice->utility_type;
+
+    if ($new_amount < 0 && $new_type ne 'other') {
         status 400;
-        return { success => 0, error => 'Amount must be positive' };
+        return { success => 0,
+                 error => 'Negative amounts are only allowed for "other" invoices' };
     }
 
     # Remove id if passed (parameter tampering prevention)
